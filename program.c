@@ -24,12 +24,20 @@ int CopyDir(char *path_out, char *path_to);
 //====================================================================================================//
 
 int main(int argc, char ** argv) {
-	if (argc != 3){
-		printf("Wrong number of argument.\n");
+
+	if (argc >= 3){
+		printf("It must be more than 2 arguments\n");
 		exit(EXIT_FAILURE);
 	}
 
-	CopyDir(argv[1], argv[2]);
+	if (argc == 4 && argv[3] == "-a"){
+		printf("It must running demon, but not yet)\n");
+	}
+
+	if (argc == 3){
+		CopyDir(argv[1], argv[2]);
+	}
+	
 
 	return 0;
 }
