@@ -80,6 +80,8 @@ int CopyDir(char *path_out, char *path_to){
 	return 0;
 }
 
+//----------------------------------------------------------------------------------------------------//
+
 char* Concatinate(char *part1, char *part2){
 	char* result = (char *) calloc(256, sizeof (char));
 	buf_i = 0;
@@ -110,6 +112,8 @@ char* Concatinate(char *part1, char *part2){
 	return result;
 }
 
+//----------------------------------------------------------------------------------------------------//
+
 int GetFileSize(int fd){
 	if(fd == -1)
 		return -1;
@@ -119,6 +123,8 @@ int GetFileSize(int fd){
 	off_t file_size = buf.st_size;
 	return file_size;
 }
+
+//----------------------------------------------------------------------------------------------------//
 
 int CopyFile(char *path_out, char *path_to){
 	printf("CopyFile%s\n", path_out);
@@ -144,6 +150,8 @@ int CopyFile(char *path_out, char *path_to){
 	return 0;
 }
 
+//----------------------------------------------------------------------------------------------------//
+
 int ArrEqual(char *arr1, char *arr2){
 	int i = 0;
 	while (arr1[i] != 0 && arr2[i] != 0){
@@ -154,6 +162,8 @@ int ArrEqual(char *arr1, char *arr2){
 	}
 	return 1;
 }
+
+//----------------------------------------------------------------------------------------------------//
 
 int RemoveDirectory(char *path) {
 	printf("RemoveDirectory %s\n", path);
@@ -200,6 +210,8 @@ int RemoveDirectory(char *path) {
 	return r;
 }
 
+//----------------------------------------------------------------------------------------------------//
+
 int RemoveExtra(char *path_from, char *path_to){
 	DIR* pdir_from = opendir(path_from);
 	if(pdir_from == 0){
@@ -238,6 +250,8 @@ int RemoveExtra(char *path_from, char *path_to){
 	closedir(pdir_from);
 	return 0;
 }
+
+//----------------------------------------------------------------------------------------------------//
 
 int DifferentFiles(char * path_1, char * path_2) {
 	int file1 = open(path_1, O_RDONLY);
