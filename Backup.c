@@ -27,14 +27,13 @@ int DifferentFiles(char * path_1, char * path_2);
 int CopyDir(char *path_out, char *path_to);
 void mainloop();
 int SetInotifyRecursively(char *path, int ino_fd){
-	printf("Set inotify, path = %s\n", path);
+	inotify_add_watch(ino_fd, path, IN_CREATE | IN_DELETE | IN_MODIFY);
+	//printf("Set inotify, path = %s, added = %d\n", path, added);
 	DIR* pdir = opendir(path);
-	//printf("pdir = %p\n", pdir);
 	struct dirent* dt;
 	while ((dt = readdir(pdir)) != NULL){
 		char *new_path = Concatinate(path, dt->d_name);
 		if (dt->d_type == DT_DIR && dt->d_name[0] != '.'){
-			inotify_add_watch(ino_fd, new_path, IN_CREATE || IN_DELETE || IN_CLOSE);
 			SetInotifyRecursively(new_path, ino_fd);
 		}
 		free(new_path);
@@ -96,22 +95,21 @@ int main(int argc, char ** argv) {
 		if(forked == 0) {
 			//setsid();
 			int ino_fd = inotify_init();
-			SetInotifyRecursively(argv[1], ino_fd);
 			CopyDir(argv[1], argv[2]);
+			SetInotifyRecursively(argv[1], ino_fd);
 			char buf[sizeof(struct inotify_event) + PATH_MAX];
 			while (1){
-				printf("In while\n");
 				int i = 1;
-				while ((read(inotify_fd, (void *) buf, i * MIN_BUF_LEN)) <= 0) {
-					i++;
+				while (read(ino_fd, (void *) buf, PATH_MAX) <= 0) {
+					;
 				}
 				PrintEvent((struct inotify_event*) buf);
-				printf("Something happened\n");
 				RemoveExtra(argv[1], argv[2]);
 				CopyDir(argv[1], argv[2]);
 				close(ino_fd);
 				ino_fd = inotify_init();
 				SetInotifyRecursively(argv[1], ino_fd);
+				//while (read(ino_fd, (void *) buf, PATH_MAX) <= 0) {;}
 			}
 		} else{
 			printf("Deamon has been run\n");
@@ -182,10 +180,10 @@ int CopyDir(char *path_out, char *path_to){
 				break;
 			case DT_REG:
 				if (DifferentFiles(new_path_from, new_path_to)) {
-					printf("Files are different\n");
+					//printf("Files are different\n");
 					CopyFile(new_path_from, new_path_to);
 				}else{
-					printf("Files are equal\n");
+					//printf("Files are equal\n");
 				}
 				break;
 			case DT_FIFO:
@@ -207,6 +205,7 @@ int CopyDir(char *path_out, char *path_to){
 //----------------------------------------------------------------------------------------------------//
 
 void PrintEvent(struct inotify_event *event){
+	printf("In PrintEvent, ");
 	if (event->mask & IN_CREATE){
 		printf("%s in create\n", event->name);
 	}
@@ -216,7 +215,12 @@ void PrintEvent(struct inotify_event *event){
 	if (event->mask & IN_CLOSE){
 		printf("%s in close\n", event->name);
 	}
-
+	if (event->mask & IN_MODIFY){
+		printf("%s in modify\n", event->name);
+	}
+	if (event->mask & IN_CLOSE){
+		printf("%s in close\n", event->name);
+	}
 }
 
 char* Concatinate(char *part1, char *part2){
@@ -290,7 +294,7 @@ int DestInSource(char *destination, char *source){
 		free(full_path_dst);
 		return -2;
 	}
-	printf("full_path_dst = %s, full_path_src = %s\n", full_path_dst, full_path_src);
+	//printf("full_path_dst = %s, full_path_src = %s\n", full_path_dst, full_path_src);
 	int i = 0;
 	while (full_path_src[i] != 0 && full_path_src[i] == full_path_dst[i]){
 		i++;
@@ -321,7 +325,7 @@ int GetFileSize(int fd){
 //----------------------------------------------------------------------------------------------------//
 
 int CopyFile(char *path_out, char *path_to){
-	printf("CopyFile%s\n", path_out);
+	//printf("CopyFile%s\n", path_out);
 	int fd_in = open(path_out, O_RDONLY);
 	int fd_out = open(path_to, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	if(fd_out == -1){
@@ -451,7 +455,7 @@ int DifferentFiles(char * path_1, char * path_2) {
 	int file1 = open(path_1, O_RDONLY);
 	int file2 = open(path_2, O_RDONLY);
 	if (file2 == -1) {
-		printf("comparator returning cause does not exist ERRNO = %i\n", errno);
+		//printf("comparator returning cause does not exist ERRNO = %i\n", errno);
 		close(file1);
 		close(file2);
 		return 1;
