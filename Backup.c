@@ -7,14 +7,17 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/inotify.h>
 
 //====================================================================================================//
 
+int inotify_mode = 0;
 int buf_i;
 
+void PrintEvent(struct inotify_event *event);
 char* Concatinate(char *part1, char *part2);
 int GetFullPath(char* path, char *full_path); // Переводит путь к файлу в полный путь
-int DestInSource(char *destination, char *source); //return 1 if destination in source, 0 if not and -1 if error
+int DestInSource(char *destination, char *source); //return 1 if destination in source, 0 if not and -1 if destination doesn't exist, -2 if src
 int GetFileSize(int fd);
 int CopyFile(char *path_out, char *path_to);
 int ArrEqual(char *arr1, char *arr2);
@@ -23,20 +26,51 @@ int RemoveExtra(char *path_from, char *path_to);
 int DifferentFiles(char * path_1, char * path_2);
 int CopyDir(char *path_out, char *path_to);
 void mainloop();
+int SetInotifyRecursively(char *path, int ino_fd){
+	printf("Set inotify, path = %s\n", path);
+	DIR* pdir = opendir(path);
+	//printf("pdir = %p\n", pdir);
+	struct dirent* dt;
+	while ((dt = readdir(pdir)) != NULL){
+		char *new_path = Concatinate(path, dt->d_name);
+		if (dt->d_type == DT_DIR && dt->d_name[0] != '.'){
+			inotify_add_watch(ino_fd, new_path, IN_CREATE || IN_DELETE || IN_CLOSE);
+			SetInotifyRecursively(new_path, ino_fd);
+		}
+		free(new_path);
+	}
+	closedir(pdir);
+	return 0;
+}
 
 //====================================================================================================//
 
 int main(int argc, char ** argv) {
-	printf("dst in src %d\n", DestInSource("./", "../"));
-	/*
 	if (argc < 3){
 		printf("It must be more than 2 arguments\n");
 		exit(EXIT_FAILURE);
 	}
+	int dst_in_str = DestInSource(argv[2], argv[1]);
+	if(dst_in_str){
+		switch (dst_in_str) {
+			case 1:
+				printf("destination in source\n");
+				exit(EXIT_FAILURE);
+				break;
+			case -1:
+				printf("destination does not exist\n");
+				break;
+			case -2:
+				printf("source does not exists\n");
+				exit(EXIT_FAILURE);
+				break;
+		}
+	}
+
 	if ((argc == 4) && (!strcmp("-auto", argv[3]))){
 		//printf("It must running demon, but not yet)\n");
 		//printf("%d\n", PATH_MAX);
-		char cwd[PATH_MAX];
+		//char cwd[PATH_MAX];
 		mkfifo("chanel" , O_RDWR | 0777);
 		int pid = fork();
 		switch(pid) {
@@ -53,19 +87,48 @@ int main(int argc, char ** argv) {
 			printf("OK: demon with pid %d is created\n", pid);
 			break;
 		}
+		return 0;
 	}
+
+	if ((argc == 4 || argc == 5) && (!strcmp(argv[3], "-inotify") || !strcmp(argv[4], "-inotify"))){
+		inotify_mode++;
+		int forked = 0;
+		if(forked == 0) {
+			//setsid();
+			int ino_fd = inotify_init();
+			SetInotifyRecursively(argv[1], ino_fd);
+			CopyDir(argv[1], argv[2]);
+			char buf[sizeof(struct inotify_event) + PATH_MAX];
+			while (1){
+				printf("In while\n");
+				int i = 1;
+				while ((read(inotify_fd, (void *) buf, i * MIN_BUF_LEN)) <= 0) {
+					i++;
+				}
+				PrintEvent((struct inotify_event*) buf);
+				printf("Something happened\n");
+				RemoveExtra(argv[1], argv[2]);
+				CopyDir(argv[1], argv[2]);
+				close(ino_fd);
+				ino_fd = inotify_init();
+				SetInotifyRecursively(argv[1], ino_fd);
+			}
+		} else{
+			printf("Deamon has been run\n");
+		}
+	}
+
 	if (argc == 3){
+		RemoveExtra(argv[1], argv[2]);
 		CopyDir(argv[1], argv[2]);
 	}
-	*/
+
 	return 0;
 }
 
 //====================================================================================================//
 
 void mainloop(){
-	int ret = 0;
-
 	printf("Still here\n");
 
 	char command[PATH_MAX] = {0};
@@ -78,7 +141,7 @@ void mainloop(){
 	dprintf(chanel, "HELLO\n");
 
 	while(1){
-		ret = read(chanel, command, 4096);
+		read(chanel, command, 4096);
 		dprintf(chanel, "DAEMON: I read %s\n", command);
 
 		if (!strncmp(command, "bcp_dir", 4)){dprintf(chanel, "get command: bcp_dir\n");}
@@ -143,6 +206,19 @@ int CopyDir(char *path_out, char *path_to){
 
 //----------------------------------------------------------------------------------------------------//
 
+void PrintEvent(struct inotify_event *event){
+	if (event->mask & IN_CREATE){
+		printf("%s in create\n", event->name);
+	}
+	if (event->mask & IN_DELETE){
+		printf("%s in delete\n", event->name);
+	}
+	if (event->mask & IN_CLOSE){
+		printf("%s in close\n", event->name);
+	}
+
+}
+
 char* Concatinate(char *part1, char *part2){
 	char* result = (char *) calloc(PATH_MAX, sizeof (char));
 	buf_i = 0;
@@ -189,12 +265,12 @@ int GetFullPath(char* path, char *full_path){
 
 	getcwd(full_path, PATH_MAX);
 	char *concatenated = Concatinate(full_path, path);
-	printf("concatenated = %s\n", concatenated);
+	//printf("concatenated = %s\n", concatenated);
 	if(realpath(concatenated, full_path) == NULL){
 		free(concatenated);
 		return -1;
 	}
-	printf("fullpath = %s\n", full_path);
+	//printf("fullpath = %s\n", full_path);
 	free(concatenated);
 	return 1;
 }
@@ -212,7 +288,7 @@ int DestInSource(char *destination, char *source){
 	if(GetFullPath(source, full_path_src) == -1){
 		free(full_path_src);
 		free(full_path_dst);
-		return -1;
+		return -2;
 	}
 	printf("full_path_dst = %s, full_path_src = %s\n", full_path_dst, full_path_src);
 	int i = 0;
