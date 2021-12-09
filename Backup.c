@@ -34,15 +34,13 @@ int main(int argc, char ** argv) {
 		//printf("It must running demon, but not yet)\n");
 		//printf("%d\n", PATH_MAX);
 		char cwd[PATH_MAX];
-		mkfifo( strcat(getcwd(cwd, sizeof(cwd)),"/chanel") , O_RDWR);
+		mkfifo( strcat(getcwd(cwd, sizeof(cwd)),"/chanel") , O_RDWR | 0777);
 		int pid = fork();
 		switch(pid) {
 		case 0:
+			printf("Hey\n");
 			setsid();
-			chdir("/");
-			close(stdin);
-			close(stdout);
-			close(stderr);
+			printf("Im alive\n");
 			mainloop();
 			exit(0);
 		case -1:
@@ -64,15 +62,35 @@ int main(int argc, char ** argv) {
 //====================================================================================================//
 
 void mainloop(){
+	int ret = 0;
 
-	int ret = open("chanel", O_RDWR);
-	if(ret == -1){
+	printf("Still here\n");
+
+	char command[4096] = {0};
+
+	int chanel = open("chanel", O_RDWR);
+	if(chanel == -1){
 		perror("Can't open fifo chanel\n");
 	}
 
+	dprintf(chanel, "HELLO\n");
+
 	while(1){
+		ret = read(chanel, command, 4096);
+		dprintf(chanel, "DAEMON: I read %s\n", command);
+
+		if (!strncmp(command, "bcp_dir", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "cpy_dir", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "log", 3)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "auto", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "backup", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "exit", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "term", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else {dprintf(chanel ,"get command: unknown command");}
 		
 	}
+
+	printf("HOW\n");
 }
 
 //====================================================================================================//
