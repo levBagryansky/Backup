@@ -68,7 +68,7 @@ void Mainloop(){
 	char * command;
 	char text[PATH_MAX] = {0};
 
-	int fd_chanel = open("chanel", O_CREAT | O_EXCL | 0777);
+	int fd_chanel = open("chanel.txt", O_CREAT | O_EXCL | 0777);
 
 	while(1){
 		lseek(fd_chanel, SEEK_SET, 0);
@@ -79,9 +79,7 @@ void Mainloop(){
 			continue;
 		}
 		
-		if (!strncmp(command, "DAEMON", 6)){
-			;
-		}else if(!strncmp(command, "bcp_dir", 4)){
+		if(!strncmp(command, "bcp_dir", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: bcp_dir\n");
 		}else if(!strncmp(command, "cpy_dir", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: cpy_dir\n");
@@ -93,9 +91,9 @@ void Mainloop(){
 			dprintf(fd_chanel, "DAEMON: get command: backup\n");
 		}else if(!strncmp(command, "exit", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: exit\n");
-			dprintf(fd_chanel, "DAEMON: This chanel will be removed, please leave from this fifo\n");
+			dprintf(fd_chanel, "DAEMON: This file will be removed, please leave without saving\n");
 			close(fd_chanel);
-			remove("chanel");
+			remove("chanel.txt");
 			exit(EXIT_SUCCESS);
 		}else if(!strncmp(command, "term", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: term\n");
@@ -114,8 +112,46 @@ char * Find_command(char * txt){
 		return NULL;
 	}
 	
-	
+	char * dtxt = txt;
+	char * ret_pointer;
 
+	int count_D = 0;
+
+	while(1){
+		dtxt = strstr(dtxt,"DEAMON");
+		if(dtxt){
+			count_D++;
+			dtxt += 6;
+		}else{
+			break;
+		}
+	}
+
+	int count_N = 0;
+	dtxt = txt;
+
+	while(1){
+		dtxt = strchr(dtxt, '\n');
+		if(dtxt){
+			count_N++;
+			dtxt++;
+		}else{
+			break;
+		}
+	}
+
+	if (count_D == count_N){
+		return NULL;
+	}else{
+		dtxt = txt;
+		for (int i = 0; i < count_D; i++){
+			dtxt = strchr(dtxt, '\n');
+			dtxt++;
+		}
+		ret_pointer = dtxt;		
+	}
+	
+	return ret_pointer;
 }
 
 //----------------------------------------------------------------------------------------------------//
