@@ -20,7 +20,8 @@ int RemoveDirectory(char *path);
 int RemoveExtra(char *path_from, char *path_to);
 int DifferentFiles(char * path_1, char * path_2);
 int CopyDir(char *path_out, char *path_to);
-void mainloop();
+void Mainloop();
+char * Find_command(char * txt);
 
 //====================================================================================================//
 
@@ -61,39 +62,63 @@ int main(int argc, char ** argv) {
 
 //====================================================================================================//
 
-void mainloop(){
+void Mainloop(){
 	int ret = 0;
 
-	printf("Still here\n");
+	char * command;
+	char text[PATH_MAX] = {0};
 
-	char command[4096] = {0};
-
-	int chanel = open("chanel", O_RDWR);
-	if(chanel == -1){
-		perror("Can't open fifo chanel\n");
-	}
-
-	dprintf(chanel, "HELLO\n");
+	int fd_chanel = open("chanel", O_CREAT | O_EXCL | 0777);
 
 	while(1){
-		ret = read(chanel, command, 4096);
-		dprintf(chanel, "DAEMON: I read %s\n", command);
+		lseek(fd_chanel, SEEK_SET, 0);
+		ret = read(fd_chanel, text, 4096);
 
-		if (!strncmp(command, "bcp_dir", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "cpy_dir", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "log", 3)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "auto", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "backup", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "exit", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "term", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else {dprintf(chanel ,"get command: unknown command");}
+		command = Find_command(text);
+		if (!command){
+			continue;
+		}
 		
+		if (!strncmp(command, "DAEMON", 6)){
+			;
+		}else if(!strncmp(command, "bcp_dir", 4)){
+			dprintf(fd_chanel, "DAEMON: get command: bcp_dir\n");
+		}else if(!strncmp(command, "cpy_dir", 4)){
+			dprintf(fd_chanel, "DAEMON: get command: cpy_dir\n");
+		}else if(!strncmp(command, "log", 3)){
+			dprintf(fd_chanel, "DAEMON: get command: log\n");
+		}else if(!strncmp(command, "auto", 4)){
+			dprintf(fd_chanel, "DAEMON: get command: auto\n");
+		}else if(!strncmp(command, "backup", 4)){
+			dprintf(fd_chanel, "DAEMON: get command: backup\n");
+		}else if(!strncmp(command, "exit", 4)){
+			dprintf(fd_chanel, "DAEMON: get command: exit\n");
+			dprintf(fd_chanel, "DAEMON: This chanel will be removed, please leave from this fifo\n");
+			close(fd_chanel);
+			remove("chanel");
+			exit(EXIT_SUCCESS);
+		}else if(!strncmp(command, "term", 4)){
+			dprintf(fd_chanel, "DAEMON: get command: term\n");
+		}else{
+			dprintf(fd_chanel, "DAEMON: get command: unknown command\n");
+		}
 	}
 
 	printf("HOW\n");
 }
 
 //====================================================================================================//
+
+char * Find_command(char * txt){
+	if (txt[strlen(txt) - 1] != '\n'){
+		return NULL;
+	}
+	
+	
+
+}
+
+//----------------------------------------------------------------------------------------------------//
 
 int CopyDir(char *path_out, char *path_to){
 	printf("CopyDir, path_out = %s\n", path_out);
