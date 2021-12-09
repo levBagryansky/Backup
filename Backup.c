@@ -13,6 +13,8 @@
 int buf_i;
 
 char* Concatinate(char *part1, char *part2);
+int GetFullPath(char* path, char *full_path); // Переводит путь к файлу в полный путь
+int DestInSource(char *destination, char *source); //return 1 if destination in source, 0 if not and -1 if error
 int GetFileSize(int fd);
 int CopyFile(char *path_out, char *path_to);
 int ArrEqual(char *arr1, char *arr2);
@@ -25,6 +27,8 @@ void mainloop();
 //====================================================================================================//
 
 int main(int argc, char ** argv) {
+	printf("dst in src %d\n", DestInSource("./", "../"));
+	/*
 	if (argc < 3){
 		printf("It must be more than 2 arguments\n");
 		exit(EXIT_FAILURE);
@@ -34,15 +38,13 @@ int main(int argc, char ** argv) {
 		//printf("It must running demon, but not yet)\n");
 		//printf("%d\n", PATH_MAX);
 		char cwd[PATH_MAX];
-		mkfifo( strcat(getcwd(cwd, sizeof(cwd)),"/chanel") , O_RDWR);
+		mkfifo("chanel" , O_RDWR | 0777);
 		int pid = fork();
 		switch(pid) {
 		case 0:
+			printf("Hey\n");
 			setsid();
-			chdir("/");
-			close(stdin);
-			close(stdout);
-			close(stderr);
+			printf("Im alive\n");
 			mainloop();
 			exit(0);
 		case -1:
@@ -57,22 +59,42 @@ int main(int argc, char ** argv) {
 	if (argc == 3){
 		CopyDir(argv[1], argv[2]);
 	}
-
+	*/
 	return 0;
 }
 
 //====================================================================================================//
 
 void mainloop(){
+	int ret = 0;
 
-	int ret = open("chanel", O_RDWR);
-	if(ret == -1){
+	printf("Still here\n");
+
+	char command[PATH_MAX] = {0};
+
+	int chanel = open("chanel", O_RDWR);
+	if(chanel == -1){
 		perror("Can't open fifo chanel\n");
 	}
 
+	dprintf(chanel, "HELLO\n");
+
 	while(1){
+		ret = read(chanel, command, 4096);
+		dprintf(chanel, "DAEMON: I read %s\n", command);
+
+		if (!strncmp(command, "bcp_dir", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "cpy_dir", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "log", 3)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "auto", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "backup", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "exit", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else if (!strncmp(command, "term", 4)){dprintf(chanel, "get command: bcp_dir\n");}
+		else {dprintf(chanel ,"get command: unknown command\n");}
 		
 	}
+
+	printf("HOW\n");
 }
 
 //====================================================================================================//
@@ -124,19 +146,21 @@ int CopyDir(char *path_out, char *path_to){
 //----------------------------------------------------------------------------------------------------//
 
 char* Concatinate(char *part1, char *part2){
-	char* result = (char *) calloc(256, sizeof (char));
+	char* result = (char *) calloc(PATH_MAX, sizeof (char));
 	buf_i = 0;
 	while (part1[buf_i] != 0){
 		result[buf_i] = part1[buf_i];
 		buf_i++;
-		if(buf_i == 255){
+		if(buf_i == PATH_MAX - 1){
 			free(result);
 			return NULL;
 		}
 	}
-	result[buf_i] = '/';
-	buf_i++;
-	if(buf_i == 255){
+	if(result[buf_i - 1] != '/') {
+		result[buf_i] = '/';
+		buf_i++;
+	}
+	if(buf_i == PATH_MAX - 2){
 		free(result);
 		return NULL;
 	}
@@ -144,13 +168,68 @@ char* Concatinate(char *part1, char *part2){
 	while (part2[buf_i - len_part_1] != 0){
 		result[buf_i] = part2[buf_i - len_part_1];
 		buf_i++;
-		if(buf_i == 255){
+		if(buf_i == PATH_MAX - 1){
 			free(result);
 			return NULL;
 		}
 	}
 	//result[buf_i] = '/';
 	return result;
+}
+
+//----------------------------------------------------------------------------------------------------//
+
+int GetFullPath(char* path, char *full_path){
+	if(path[0] == '/'){
+		int i = 0;
+		while (path[i] != 0){
+			full_path[i] = path[i];
+			i++;
+		}
+		return 1;
+	}
+
+	getcwd(full_path, PATH_MAX);
+	char *concatenated = Concatinate(full_path, path);
+	printf("concatenated = %s\n", concatenated);
+	if(realpath(concatenated, full_path) == NULL){
+		free(concatenated);
+		return -1;
+	}
+	printf("fullpath = %s\n", full_path);
+	free(concatenated);
+	return 1;
+}
+
+//----------------------------------------------------------------------------------------------------//
+
+int DestInSource(char *destination, char *source){
+	char *full_path_dst = (char *) calloc(PATH_MAX, sizeof (char));
+	char *full_path_src = (char *) calloc(PATH_MAX, sizeof (char));
+	if(GetFullPath(destination, full_path_dst) == -1){
+		free(full_path_src);
+		free(full_path_dst);
+		return -1;
+	}
+	if(GetFullPath(source, full_path_src) == -1){
+		free(full_path_src);
+		free(full_path_dst);
+		return -1;
+	}
+	printf("full_path_dst = %s, full_path_src = %s\n", full_path_dst, full_path_src);
+	int i = 0;
+	while (full_path_src[i] != 0 && full_path_src[i] == full_path_dst[i]){
+		i++;
+	}
+	if(full_path_src[i] == 0 || full_path_src[i+1] == 0){
+		printf("i = %d, full_path_src[i] = %d\n", i, full_path_src[i]);
+		free(full_path_src);
+		free(full_path_dst);
+		return 1;
+	}
+	free(full_path_src);
+	free(full_path_dst);
+	return 0;
 }
 
 //----------------------------------------------------------------------------------------------------//
