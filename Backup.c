@@ -17,29 +17,62 @@ int GetFileSize(int fd);
 int CopyFile(char *path_out, char *path_to);
 int ArrEqual(char *arr1, char *arr2);
 int RemoveDirectory(char *path);
-int RemoveExtra(char *path_from, char *path_to); //deleted extra files from path_to
+int RemoveExtra(char *path_from, char *path_to);
 int DifferentFiles(char * path_1, char * path_2);
 int CopyDir(char *path_out, char *path_to);
+void mainloop();
 
 //====================================================================================================//
 
 int main(int argc, char ** argv) {
-
-	if (argc >= 3){
+	if (argc < 3){
 		printf("It must be more than 2 arguments\n");
 		exit(EXIT_FAILURE);
 	}
 
-	if (argc == 4 && argv[3] == "-a"){
-		printf("It must running demon, but not yet)\n");
+	if ((argc == 4) && (!strcmp("-auto", argv[3]))){
+		//printf("It must running demon, but not yet)\n");
+		//printf("%d\n", PATH_MAX);
+		char cwd[PATH_MAX];
+		mkfifo( strcat(getcwd(cwd, sizeof(cwd)),"/chanel") , O_RDWR);
+		int pid = fork();
+		switch(pid) {
+		case 0:
+			setsid();
+			chdir("/");
+			close(stdin);
+			close(stdout);
+			close(stderr);
+			mainloop();
+			exit(0);
+		case -1:
+			printf("Fail: unable to fork\n");
+			break;
+		default:
+			printf("OK: demon with pid %d is created\n", pid);
+			break;
+		}
 	}
 
 	if (argc == 3){
 		CopyDir(argv[1], argv[2]);
 	}
-	
 
 	return 0;
+}
+
+//====================================================================================================//
+
+void mainloop(){
+
+	int ret = open("chanel", O_RDWR);
+	if(ret == -1){
+		perror("Can't open fifo chanel\n");
+	}
+
+	while(1){
+		
+	}
 }
 
 //====================================================================================================//
