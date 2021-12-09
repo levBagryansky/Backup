@@ -99,7 +99,6 @@ int main(int argc, char ** argv) {
 			SetInotifyRecursively(argv[1], ino_fd);
 			char buf[sizeof(struct inotify_event) + PATH_MAX];
 			while (1){
-				int i = 1;
 				while (read(ino_fd, (void *) buf, PATH_MAX) <= 0) {
 					;
 				}
@@ -137,8 +136,14 @@ void mainloop(){
 	}
 
 	dprintf(chanel, "HELLO\n");
+	int ino_chanel = inotify_init();
+	inotify_add_watch(ino_chanel, "chanel", IN_MODIFY);
+	char buf[sizeof(struct inotify_event) + PATH_MAX];
 
 	while(1){
+		while (read(ino_chanel, (void *) buf, PATH_MAX) <= 0) {
+			;
+		}
 		read(chanel, command, 4096);
 		dprintf(chanel, "DAEMON: I read %s\n", command);
 
@@ -207,19 +212,19 @@ int CopyDir(char *path_out, char *path_to){
 void PrintEvent(struct inotify_event *event){
 	printf("In PrintEvent, ");
 	if (event->mask & IN_CREATE){
-		printf("%s in create\n", event->name);
+		printf("\"%s\" in create\n", event->name);
 	}
 	if (event->mask & IN_DELETE){
-		printf("%s in delete\n", event->name);
+		printf("\"%s\" in delete\n", event->name);
 	}
 	if (event->mask & IN_CLOSE){
-		printf("%s in close\n", event->name);
+		printf("\"%s\" in close\n", event->name);
 	}
 	if (event->mask & IN_MODIFY){
-		printf("%s in modify\n", event->name);
+		printf("\"%s\" in modify\n", event->name);
 	}
 	if (event->mask & IN_CLOSE){
-		printf("%s in close\n", event->name);
+		printf("\"%s\" in close\n", event->name);
 	}
 }
 
