@@ -12,6 +12,7 @@
 #include <sys/inotify.h>
 #include <time.h>
 
+//====================================================================================================//
 
 #define MAX_EVENTS 1024 /*Максимальное кличество событий для обработки за один раз*/
 #define LEN_NAME 16 /*Будем считать, что длина имени файла не превышает 16 символов*/
@@ -23,6 +24,10 @@
 int inotify_mode = 0;
 int buf_i;
 int log_fd = 0;
+pid_t pid_parent;
+pid_t pid_child;
+char path_for_copy_dir[PATH_MAX] = {0};
+char path_for_bckp_dir[PATH_MAX] = {0};
 
 void PrintEvent(struct inotify_event *event);
 char* Concatinate(char *part1, char *part2);
@@ -38,6 +43,7 @@ int CopyDir(char *path_out, char *path_to);
 int SetInotifyRecursively(char *path, int ino_fd);
 void Mainloop();
 char * Find_command(char * txt);
+void Inotify_mode();
 
 //====================================================================================================//
 
@@ -46,7 +52,11 @@ int main(int argc, char ** argv) {
 		printf("It must be more than 2 arguments\n");
 		exit(EXIT_FAILURE);
 	}
-	int dst_in_str = DestInSource(argv[2], argv[1]);
+
+	strcpy(path_for_copy_dir, argv[1]);
+	strcpy(path_for_bckp_dir, argv[2]);
+
+	int dst_in_str = DestInSource(path_for_bckp_dir, path_for_copy_dir);
 	if(dst_in_str){
 		switch (dst_in_str) {
 			case 1:
@@ -64,60 +74,31 @@ int main(int argc, char ** argv) {
 	}
 
 	if ((argc == 4) && (!strcmp("-auto", argv[3]))){
-		mkdir(argv[2], 0777);
-		char *path_to_log_file = Concatinate(argv[2], ".log_backup");
+		mkdir(path_for_bckp_dir, 0777);
+		char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
 		log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 		int pid = fork();
 		switch(pid) {
 		case 0:
 			//setsid();
-			printf("CHILD NOT DAEMON\n");
+			//printf("CHILD NOT DAEMON\n");
 			Mainloop();
-			exit(0);
+			exit(EXIT_FAILURE);
 		case -1:
 			printf("Fail: unable to fork\n");
 			break;
 		default:
-			printf("OK: demon with pid %d is created\n", pid);
-			int wst;
-			wait(&wst);
-				close(log_fd);
+			//printf("OK: demon with pid %d is created\n", pid);
+			//int wst;
+			//wait(&wst);
 			break;
 		}
 		return 0;
 	}
 
-	if ((argc == 4 || argc == 5) && (!strcmp(argv[3], "-inotify") || !strcmp(argv[4], "-inotify"))){
-		inotify_mode++;
-		char *path_to_log_file = Concatinate(argv[2], ".log_backup");
-		log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
-		int forked = 0;
-		if(forked == 0) {
-			//setsid();
-			int ino_fd = inotify_init();
-			CopyDir(argv[1], argv[2]);
-			SetInotifyRecursively(argv[1], ino_fd);
-			char buf[sizeof(struct inotify_event) + PATH_MAX];
-			while (1){
-				while (read(ino_fd, (void *) buf, PATH_MAX) <= 0) {
-					;
-				}
-				PrintEvent((struct inotify_event*) buf);
-				RemoveExtra(argv[1], argv[2]);
-				CopyDir(argv[1], argv[2]);
-				close(ino_fd);
-				ino_fd = inotify_init();
-				SetInotifyRecursively(argv[1], ino_fd);
-				//while (read(ino_fd, (void *) buf, PATH_MAX) <= 0) {;}
-			}
-		} else{
-			printf("Deamon has been run\n");
-		}
-	}
-
 	if (argc == 3){
-		RemoveExtra(argv[1], argv[2]);
-		CopyDir(argv[1], argv[2]);
+		RemoveExtra(path_for_copy_dir, path_for_bckp_dir);
+		CopyDir(path_for_copy_dir, path_for_bckp_dir);
 	}
 
 	return 0;
@@ -126,7 +107,7 @@ int main(int argc, char ** argv) {
 //====================================================================================================//
 
 void Mainloop(){
-	printf("DAEMON: already daemon\n");
+	//printf("DAEMON: already daemon\n");
 
 	int ret = 0;
 
@@ -138,7 +119,22 @@ void Mainloop(){
 		perror("DAEMON: open return -1\n");
 	}
 
-	printf("DAEMON: before while(1)\n");
+	int pid = fork();
+	switch (pid){
+	case 0:
+		Inotify_mode();
+		exit(EXIT_FAILURE);
+		break;
+	case -1:
+		printf("Fail: unable to fork\n");
+		break;			
+	default:
+		pid_parent = getpid();
+		pid_child = pid;
+		break;
+	}
+
+	//printf("DAEMON: before while(1)\n");
 
 	int ino_chanel = inotify_init();
 	inotify_add_watch(ino_chanel, "chanel.txt", IN_CLOSE | IN_OPEN | IN_MODIFY);
@@ -146,14 +142,14 @@ void Mainloop(){
 
 	while(1){
 
-		printf("DAEMON: in begining while(1)\n");
+		//printf("DAEMON: in begining while(1)\n");
 
 		while (read(ino_chanel, (void *) buf, PATH_MAX) <= 0) {
 			;
 		}
 
 
-		printf("DAEMON: event happens\n");
+		//printf("DAEMON: event happens\n");
 
 		memset(text, '\0', PATH_MAX);
 		command = text;
@@ -161,7 +157,7 @@ void Mainloop(){
 		lseek(fd_chanel, SEEK_SET, 0);
 		ret = read(fd_chanel, text, PATH_MAX);
 
-		printf("DAEMON: read %d\n", ret);
+		//printf("DAEMON: read %d\n", ret);
 
 		command = Find_command(text);
 
@@ -183,38 +179,81 @@ void Mainloop(){
 		struct tm * timeinfo;
 		time ( &rawtime );
 		timeinfo = localtime ( &rawtime );
-		dprintf(log_fd, "\ntime %s: get command %s\n", asctime (timeinfo), command);
+		dprintf(log_fd, "\ntime %sget command %s\n", asctime (timeinfo), command);
 
-		if(!strncmp(command, "bcp_dir", 4)){
-			dprintf(fd_chanel, "DAEMON: get command: bcp_dir\n");
-			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
-		}else if(!strncmp(command, "cpy_dir", 4)){
+		if(!strncmp(command, "bcp_dir", 7)){
+			kill(pid_child, SIGKILL);
+
+			command = strchr(command, ' ');
+			command++;
+
+			memset(path_for_bckp_dir, '\0', PATH_MAX);
+			strcpy(path_for_bckp_dir, command);
+
+			pid = fork();
+			switch (pid){
+			case 0:
+				Inotify_mode();
+				exit(EXIT_FAILURE);
+				break;
+			case -1:
+				printf("Fail: unable to fork\n");
+				break;			
+			default:
+				pid_parent = getpid();
+				pid_child = pid;
+				break;
+			}
+			dprintf(fd_chanel, "DAEMON: changes directory for backup to %s\n", path_for_bckp_dir);
+		}else if(!strncmp(command, "cpy_dir", 7)){
+			kill(pid_child, SIGKILL);
 			dprintf(fd_chanel, "DAEMON: get command: cpy_dir\n");
 			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
-		}else if(!strncmp(command, "log", 3)){
-			printf("DAEMON: get command: log\n");
-			dprintf(fd_chanel, "DAEMON: get command: log\n");
-			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
-		}else if(!strncmp(command, "auto", 4)){
-			dprintf(fd_chanel, "DAEMON: get command: auto\n");
-			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
-		}else if(!strncmp(command, "backup", 4)){
-			dprintf(fd_chanel, "DAEMON: get command: backup\n");
-			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
+		//}else if(!strncmp(command, "log", 3)){
+		//	printf("DAEMON: get command: log\n");
+		//	lseek(log_fd, SEEK_SET, 0);
+		//	struct stat info_from_log; 
+		//	fstat(log_fd, &info_from_log);
+		//	char * text_from_log = calloc(info_from_log.st_size, sizeof(char));
+		//	read(log_fd, text_from_log, info_from_log.st_size);
+		//	dprintf(fd_chanel, "%s", text_from_log);
+		//	free(text_from_log);
+		}else if(!strncmp(command, "info", 4)){
+			dprintf(fd_chanel, "DAEMON: copy directory: %s\n", path_for_copy_dir);
+			dprintf(fd_chanel, "DAEMON: backup directory: %s\n", path_for_bckp_dir);
 		}else if(!strncmp(command, "exit", 4)){
-			dprintf(fd_chanel, "DAEMON: get command: exit\n");
-			dprintf(fd_chanel, "DAEMON: This file will be removed, please leave without saving\n");
+			kill(pid_child, SIGKILL);
 			close(fd_chanel);
+			close(log_fd);
 			remove("chanel.txt");
 			exit(EXIT_SUCCESS);
-		}else if(!strncmp(command, "term", 4)){
-			dprintf(fd_chanel, "DAEMON: get command: term\n");
-			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
 		}else{
 			dprintf(fd_chanel, "DAEMON: get command: unknown command\n");
-			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
 		}
 
+	}
+}
+
+//----------------------------------------------------------------------------------------------------//
+
+void Inotify_mode(){
+	char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
+	log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
+	//setsid();
+	int ino_fd = inotify_init();
+	CopyDir(path_for_copy_dir, path_for_bckp_dir);
+	SetInotifyRecursively(path_for_copy_dir, ino_fd);
+	char buf[sizeof(struct inotify_event) + PATH_MAX];
+	while (1){
+		while (read(ino_fd, (void *) buf, PATH_MAX) <= 0) {
+			;
+		}
+		PrintEvent((struct inotify_event*) buf);
+		RemoveExtra(path_for_copy_dir, path_for_bckp_dir);
+		CopyDir(path_for_copy_dir, path_for_bckp_dir);
+		close(ino_fd);
+		ino_fd = inotify_init();
+		SetInotifyRecursively(path_for_copy_dir, ino_fd);
 	}
 }
 
@@ -617,6 +656,8 @@ int DifferentFiles(char * path_1, char * path_2) {
 	}
 	return 0;
 }
+
+//----------------------------------------------------------------------------------------------------//
 
 int SetInotifyRecursively(char *path, int ino_fd){
 	inotify_add_watch(ino_fd, path, IN_CREATE | IN_DELETE | IN_MODIFY);
