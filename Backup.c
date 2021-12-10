@@ -35,6 +35,7 @@ int GetFullPath(char* path, char *full_path); // Переводит путь к 
 int DestInSource(char *destination, char *source); //return 1 if destination in source, 0 if not and -1 if destination doesn't exist, -2 if src
 int GetFileSize(int fd);
 int CopyFile(char *path_out, char *path_to);
+int CopySymLik(char *path_from, char *path_to); // copied link will link to the same content
 int ArrEqual(char *arr1, char *arr2);
 int RemoveDirectory(char *path);
 int RemoveExtra(char *path_from, char *path_to);
@@ -72,11 +73,10 @@ int main(int argc, char ** argv) {
 				break;
 		}
 	}
-
+	char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
+	log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	if ((argc == 4) && (!strcmp("-auto", argv[3]))){
 		mkdir(path_for_bckp_dir, 0777);
-		char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
-		log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 		int pid = fork();
 		switch(pid) {
 		case 0:
@@ -109,7 +109,7 @@ int main(int argc, char ** argv) {
 void Mainloop(){
 	//printf("DAEMON: already daemon\n");
 
-	int ret = 0;
+	int ret;
 
 	char * command;
 	char text[PATH_MAX] = {0};
@@ -209,15 +209,7 @@ void Mainloop(){
 			kill(pid_child, SIGKILL);
 			dprintf(fd_chanel, "DAEMON: get command: cpy_dir\n");
 			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
-		//}else if(!strncmp(command, "log", 3)){
-		//	printf("DAEMON: get command: log\n");
-		//	lseek(log_fd, SEEK_SET, 0);
-		//	struct stat info_from_log; 
-		//	fstat(log_fd, &info_from_log);
-		//	char * text_from_log = calloc(info_from_log.st_size, sizeof(char));
-		//	read(log_fd, text_from_log, info_from_log.st_size);
-		//	dprintf(fd_chanel, "%s", text_from_log);
-		//	free(text_from_log);
+
 		}else if(!strncmp(command, "info", 4)){
 			dprintf(fd_chanel, "DAEMON: copy directory: %s\n", path_for_copy_dir);
 			dprintf(fd_chanel, "DAEMON: backup directory: %s\n", path_for_bckp_dir);
@@ -343,7 +335,8 @@ int CopyDir(char *path_out, char *path_to){
 				printf("Get fifo file, skip\n");
 				break;
 			case DT_LNK:
-				printf("Get link, skip\n");
+				printf("Get link, copy link\n");
+				CopySymLik(new_path_from, new_path_to);
 				break;
 			default:
 				break;
@@ -489,7 +482,7 @@ int CopyFile(char *path_out, char *path_to){
 	struct tm * timeinfo;
 	time ( &rawtime );
 	timeinfo = localtime ( &rawtime );
-	dprintf(log_fd, "\ntime %s: copying %s to %s\n", asctime (timeinfo), path_out, path_to);
+	dprintf(log_fd, "\ntime %s: copying file %s to %s\n", asctime (timeinfo), path_out, path_to);
 	//printf("CopyFile%s\n", path_out);
 	int fd_in = open(path_out, O_RDONLY);
 	int fd_out = open(path_to, O_RDWR | O_CREAT | O_TRUNC, 0666);
@@ -510,6 +503,42 @@ int CopyFile(char *path_out, char *path_to){
 	memcpy(dst, src, size);
 	close(fd_out);
 	close(fd_in);
+	return 0;
+}
+
+//----------------------------------------------------------------------------------------------------//
+
+int CopySymLik(char *path_from, char *path_to){
+	// copied link will link to the same content
+	time_t rawtime;
+	struct tm * timeinfo;
+	time ( &rawtime );
+	timeinfo = localtime ( &rawtime );
+	dprintf(log_fd, "\ntime %s: copying symlink %s to %s\n", asctime (timeinfo), path_from, path_to);
+
+	char *link_content = calloc(PATH_MAX, sizeof (char));
+	int n_read = readlink(path_from, link_content, PATH_MAX);
+	if (n_read == -1){
+		free(link_content);
+		printf("readlink returned -1\n");
+		return -1;
+	}
+
+	char* full_link_content = calloc(PATH_MAX, sizeof (char));
+	int got_full_path = GetFullPath(link_content, full_link_content);
+	free(link_content);
+	if (got_full_path == -1){
+		free(full_link_content);
+		printf("In CopySymLink GetFullPath returned %d\n", got_full_path);
+		return -1;
+	}
+
+	int symlinked = symlink(full_link_content, path_to);
+	free(full_link_content);
+	if (symlinked == -1){
+		printf("In CopySymLink symlink returned -1\n");
+		return -1;
+	}
 	return 0;
 }
 
