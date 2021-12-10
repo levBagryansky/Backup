@@ -85,7 +85,7 @@ void Mainloop(){
 	int CCCCounter = 0;
 
 	int ino_chanel = inotify_init();
-	inotify_add_watch(ino_chanel, "chanel.txt", IN_CLOSE);
+	inotify_add_watch(ino_chanel, "chanel.txt", IN_CLOSE | IN_OPEN | IN_MODIFY);
 	char buf[sizeof(struct inotify_event) + PATH_MAX];
 
 	while(1){
@@ -95,6 +95,8 @@ void Mainloop(){
 		while (read(ino_chanel, (void *) buf, PATH_MAX) <= 0) {
 			;
 		}
+
+		printf("DAEMON: event happens\n");
 
 		memset(text, '\0', PATH_MAX);
 		command = text;
@@ -113,10 +115,11 @@ void Mainloop(){
 			continue;
 		}
 		
-		close(fd_chanel);
-		fd_chanel = open("chanel.txt", O_TRUNC, 0666);
-		if (fd_chanel == -1){
-			perror("DAEMON: second open return -1\n");
+		//close(fd_chanel);
+		//remove("chanel.txt");
+		int fd_chanel = open("chanel.txt", O_RDWR | O_CREAT, 0666);
+		if(fd_chanel == -1){
+			perror("DAEMON: open return -1\n");
 		}
 		
 
@@ -147,6 +150,7 @@ void Mainloop(){
 			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
 		}else{
 			dprintf(fd_chanel, "DAEMON: get command: unknown command\n");
+			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
 		}
 
 	}
@@ -165,7 +169,7 @@ char * Find_command(char * txt){
 	int count_D = 0;
 
 	while(1){
-		dtxt = strstr(dtxt,"DEAMON");
+		dtxt = strstr(dtxt,"DAEMON");
 		if(dtxt){
 			count_D++;
 			dtxt += 6;
@@ -186,6 +190,9 @@ char * Find_command(char * txt){
 			break;
 		}
 	}
+
+	printf("FINDER: %d daemon\n", count_D);
+	printf("FINDER: %d newline\n", count_N);
 
 	if (count_D == count_N){
 		return NULL;
