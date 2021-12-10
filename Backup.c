@@ -560,24 +560,26 @@ int RemoveExtra(char *path_from, char *path_to){
 	struct dirent* dt_to;
 	int it_exist; // флаг на существование файла в директории dt_to
 	while ((dt_to = readdir(pdir_to)) != NULL){
-		it_exist = 0;
-		while ((dt_from = readdir(pdir_from)) != NULL){
-			if(ArrEqual(dt_to->d_name, dt_from->d_name)){
-				it_exist++;
-				break;
+		if (strcmp(dt_to->d_name, ".log_backup")) {
+			it_exist = 0;
+			while ((dt_from = readdir(pdir_from)) != NULL) {
+				if (ArrEqual(dt_to->d_name, dt_from->d_name)) {
+					it_exist++;
+					break;
+				}
 			}
-		}
-		if(!it_exist){ //значит удаляем
-			char* new_path = Concatinate(path_to, dt_to->d_name);
-			if(dt_to->d_type == DT_DIR){
-				RemoveDirectory(new_path);
-			}else{
-				printf("Unlinl %s\n", new_path);
-				unlink(new_path);
+			if (!it_exist) { //значит удаляем
+				char *new_path = Concatinate(path_to, dt_to->d_name);
+				if (dt_to->d_type == DT_DIR) {
+					RemoveDirectory(new_path);
+				} else {
+					printf("Unlinl %s\n", new_path);
+					unlink(new_path);
+				}
+				free(new_path);
 			}
-			free(new_path);
+			rewinddir(pdir_from);
 		}
-		rewinddir(pdir_from);
 	}
 	rewinddir(pdir_to);
 	closedir(pdir_to);
