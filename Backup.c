@@ -3,10 +3,18 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
+#include <sys/inotify.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+
+
+#define MAX_EVENTS 1024 /*Максимальное кличество событий для обработки за один раз*/
+#define LEN_NAME 16 /*Будем считать, что длина имени файла не превышает 16 символов*/
+#define EVENT_SIZE  ( sizeof (struct inotify_event) ) /*размер структуры события*/
+#define BUF_LEN     ( MAX_EVENTS * ( EVENT_SIZE + LEN_NAME )) /*буфер для хранения данных о событиях*/
 
 //====================================================================================================//
 
@@ -32,23 +40,20 @@ int main(int argc, char ** argv) {
 	}
 
 	if ((argc == 4) && (!strcmp("-auto", argv[3]))){
-		//printf("It must running demon, but not yet)\n");
-		//printf("%d\n", PATH_MAX);
-		char cwd[PATH_MAX];
-		mkfifo( strcat(getcwd(cwd, sizeof(cwd)),"/chanel") , O_RDWR | 0777);
 		int pid = fork();
 		switch(pid) {
 		case 0:
-			printf("Hey\n");
-			setsid();
-			printf("Im alive\n");
-			mainloop();
+			//setsid();
+			printf("CHILD NOT DAEMON\n");
+			Mainloop();
 			exit(0);
 		case -1:
 			printf("Fail: unable to fork\n");
 			break;
 		default:
 			printf("OK: demon with pid %d is created\n", pid);
+			int wst;
+			wait(&wst);
 			break;
 		}
 	}
@@ -63,32 +68,74 @@ int main(int argc, char ** argv) {
 //====================================================================================================//
 
 void Mainloop(){
+	printf("DAEMON: already daemon\n");
+
 	int ret = 0;
 
 	char * command;
 	char text[PATH_MAX] = {0};
 
-	int fd_chanel = open("chanel.txt", O_CREAT | O_EXCL | 0777);
+	int fd_chanel = open("chanel.txt", O_RDWR | O_CREAT, 0666);
+	if(fd_chanel == -1){
+		perror("DAEMON: open return -1\n");
+	}
+
+	printf("DAEMON: before while(1)\n");
+
+	int CCCCounter = 0;
+
+	int ino_chanel = inotify_init();
+	inotify_add_watch(ino_chanel, "chanel.txt", IN_CLOSE);
+	char buf[sizeof(struct inotify_event) + PATH_MAX];
 
 	while(1){
+
+		printf("DAEMON: in begining while(1)\n");
+
+		while (read(ino_chanel, (void *) buf, PATH_MAX) <= 0) {
+			;
+		}
+
+		memset(text, '\0', PATH_MAX);
+		command = text;
+
 		lseek(fd_chanel, SEEK_SET, 0);
-		ret = read(fd_chanel, text, 4096);
+		ret = read(fd_chanel, text, PATH_MAX);
+
+		printf("DAEMON: read %d\n", ret);
 
 		command = Find_command(text);
+
+		printf("DAEMON: GET %s\n", text);
+		printf("DAEMON: FIND %s\n", command);
+
 		if (!command){
 			continue;
 		}
 		
+		close(fd_chanel);
+		fd_chanel = open("chanel.txt", O_TRUNC, 0666);
+		if (fd_chanel == -1){
+			perror("DAEMON: second open return -1\n");
+		}
+		
+
 		if(!strncmp(command, "bcp_dir", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: bcp_dir\n");
+			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
 		}else if(!strncmp(command, "cpy_dir", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: cpy_dir\n");
+			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
 		}else if(!strncmp(command, "log", 3)){
+			printf("DAEMON: get command: log\n");
 			dprintf(fd_chanel, "DAEMON: get command: log\n");
+			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
 		}else if(!strncmp(command, "auto", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: auto\n");
+			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
 		}else if(!strncmp(command, "backup", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: backup\n");
+			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
 		}else if(!strncmp(command, "exit", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: exit\n");
 			dprintf(fd_chanel, "DAEMON: This file will be removed, please leave without saving\n");
@@ -97,12 +144,12 @@ void Mainloop(){
 			exit(EXIT_SUCCESS);
 		}else if(!strncmp(command, "term", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: term\n");
+			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
 		}else{
 			dprintf(fd_chanel, "DAEMON: get command: unknown command\n");
 		}
-	}
 
-	printf("HOW\n");
+	}
 }
 
 //====================================================================================================//
