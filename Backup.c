@@ -26,21 +26,7 @@ int RemoveExtra(char *path_from, char *path_to);
 int DifferentFiles(char * path_1, char * path_2);
 int CopyDir(char *path_out, char *path_to);
 void mainloop();
-int SetInotifyRecursively(char *path, int ino_fd){
-	inotify_add_watch(ino_fd, path, IN_CREATE | IN_DELETE | IN_MODIFY);
-	//printf("Set inotify, path = %s, added = %d\n", path, added);
-	DIR* pdir = opendir(path);
-	struct dirent* dt;
-	while ((dt = readdir(pdir)) != NULL){
-		char *new_path = Concatinate(path, dt->d_name);
-		if (dt->d_type == DT_DIR && dt->d_name[0] != '.'){
-			SetInotifyRecursively(new_path, ino_fd);
-		}
-		free(new_path);
-	}
-	closedir(pdir);
-	return 0;
-}
+int SetInotifyRecursively(char *path, int ino_fd);
 
 //====================================================================================================//
 
@@ -74,9 +60,7 @@ int main(int argc, char ** argv) {
 		int pid = fork();
 		switch(pid) {
 		case 0:
-			printf("Hey\n");
 			setsid();
-			printf("Im alive\n");
 			mainloop();
 			exit(0);
 		case -1:
@@ -126,42 +110,27 @@ int main(int argc, char ** argv) {
 //====================================================================================================//
 
 void mainloop(){
-	printf("Still here\n");
-
-	char command[PATH_MAX] = {0};
-
-	int chanel = open("chanel", O_RDWR);
-	if(chanel == -1){
-		perror("Can't open fifo chanel\n");
-	}
-
-	dprintf(chanel, "HELLO\n");
-	int ino_chanel = inotify_init();
-	inotify_add_watch(ino_chanel, "chanel", IN_MODIFY);
-	char buf[sizeof(struct inotify_event) + PATH_MAX];
-
-	while(1){
-		while (read(ino_chanel, (void *) buf, PATH_MAX) <= 0) {
-			;
-		}
-		read(chanel, command, 4096);
-		dprintf(chanel, "DAEMON: I read %s\n", command);
-
-		if (!strncmp(command, "bcp_dir", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "cpy_dir", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "log", 3)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "auto", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "backup", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "exit", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else if (!strncmp(command, "term", 4)){dprintf(chanel, "get command: bcp_dir\n");}
-		else {dprintf(chanel ,"get command: unknown command\n");}
-
-	}
-
-	printf("HOW\n");
 }
 
 //====================================================================================================//
+
+int SetInotifyRecursively(char *path, int ino_fd){
+	inotify_add_watch(ino_fd, path, IN_CREATE | IN_DELETE | IN_MODIFY);
+	//printf("Set inotify, path = %s, added = %d\n", path, added);
+	DIR* pdir = opendir(path);
+	struct dirent* dt;
+	while ((dt = readdir(pdir)) != NULL){
+		char *new_path = Concatinate(path, dt->d_name);
+		if (dt->d_type == DT_DIR && dt->d_name[0] != '.'){
+			SetInotifyRecursively(new_path, ino_fd);
+		}
+		free(new_path);
+	}
+	closedir(pdir);
+	return 0;
+}
+
+//----------------------------------------------------------------------------------------------------//
 
 int CopyDir(char *path_out, char *path_to){
 	printf("CopyDir, path_out = %s\n", path_out);
@@ -227,6 +196,8 @@ void PrintEvent(struct inotify_event *event){
 		printf("\"%s\" in close\n", event->name);
 	}
 }
+
+//----------------------------------------------------------------------------------------------------//
 
 char* Concatinate(char *part1, char *part2){
 	char* result = (char *) calloc(PATH_MAX, sizeof (char));
