@@ -10,6 +10,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/inotify.h>
+#include <time.h>
 
 
 #define MAX_EVENTS 1024 /*Максимальное кличество событий для обработки за один раз*/
@@ -21,6 +22,7 @@
 
 int inotify_mode = 0;
 int buf_i;
+int log_fd = 0;
 
 void PrintEvent(struct inotify_event *event);
 char* Concatinate(char *part1, char *part2);
@@ -62,6 +64,9 @@ int main(int argc, char ** argv) {
 	}
 
 	if ((argc == 4) && (!strcmp("-auto", argv[3]))){
+		mkdir(argv[2], 0777);
+		char *path_to_log_file = Concatinate(argv[2], ".log_backup");
+		log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 		int pid = fork();
 		switch(pid) {
 		case 0:
@@ -76,6 +81,7 @@ int main(int argc, char ** argv) {
 			printf("OK: demon with pid %d is created\n", pid);
 			int wst;
 			wait(&wst);
+				close(log_fd);
 			break;
 		}
 		return 0;
@@ -83,6 +89,8 @@ int main(int argc, char ** argv) {
 
 	if ((argc == 4 || argc == 5) && (!strcmp(argv[3], "-inotify") || !strcmp(argv[4], "-inotify"))){
 		inotify_mode++;
+		char *path_to_log_file = Concatinate(argv[2], ".log_backup");
+		log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 		int forked = 0;
 		if(forked == 0) {
 			//setsid();
@@ -132,8 +140,6 @@ void Mainloop(){
 
 	printf("DAEMON: before while(1)\n");
 
-	int CCCCounter = 0;
-
 	int ino_chanel = inotify_init();
 	inotify_add_watch(ino_chanel, "chanel.txt", IN_CLOSE | IN_OPEN | IN_MODIFY);
 	char buf[sizeof(struct inotify_event) + PATH_MAX];
@@ -145,6 +151,7 @@ void Mainloop(){
 		while (read(ino_chanel, (void *) buf, PATH_MAX) <= 0) {
 			;
 		}
+
 
 		printf("DAEMON: event happens\n");
 
@@ -171,7 +178,12 @@ void Mainloop(){
 		if(fd_chanel == -1){
 			perror("DAEMON: open return -1\n");
 		}
-		
+
+		time_t rawtime;
+		struct tm * timeinfo;
+		time ( &rawtime );
+		timeinfo = localtime ( &rawtime );
+		dprintf(log_fd, "\ntime %s: get command %s\n", asctime (timeinfo), command);
 
 		if(!strncmp(command, "bcp_dir", 4)){
 			dprintf(fd_chanel, "DAEMON: get command: bcp_dir\n");
@@ -204,24 +216,6 @@ void Mainloop(){
 		}
 
 	}
-}
-
-//====================================================================================================//
-
-int SetInotifyRecursively(char *path, int ino_fd){
-	inotify_add_watch(ino_fd, path, IN_CREATE | IN_DELETE | IN_MODIFY);
-	//printf("Set inotify, path = %s, added = %d\n", path, added);
-	DIR* pdir = opendir(path);
-	struct dirent* dt;
-	while ((dt = readdir(pdir)) != NULL){
-		char *new_path = Concatinate(path, dt->d_name);
-		if (dt->d_type == DT_DIR && dt->d_name[0] != '.'){
-			SetInotifyRecursively(new_path, ino_fd);
-		}
-		free(new_path);
-	}
-	closedir(pdir);
-	return 0;
 }
 
 //----------------------------------------------------------------------------------------------------//
@@ -325,21 +319,26 @@ int CopyDir(char *path_out, char *path_to){
 //----------------------------------------------------------------------------------------------------//
 
 void PrintEvent(struct inotify_event *event){
+	time_t rawtime;
+	struct tm * timeinfo;
+	time ( &rawtime );
+	timeinfo = localtime ( &rawtime );
 	printf("In PrintEvent, ");
 	if (event->mask & IN_CREATE){
 		printf("\"%s\" in create\n", event->name);
+		dprintf(log_fd, "\ntime: %s, \"%s\" in create\n",  asctime(timeinfo), event->name);
 	}
 	if (event->mask & IN_DELETE){
 		printf("\"%s\" in delete\n", event->name);
+		dprintf(log_fd, "\ntime: %s, \"%s\" in delete\n",  asctime(timeinfo), event->name);
 	}
 	if (event->mask & IN_CLOSE){
 		printf("\"%s\" in close\n", event->name);
+		dprintf(log_fd, "\ntime: %s, \"%s\" in close\n",  asctime(timeinfo), event->name);
 	}
 	if (event->mask & IN_MODIFY){
 		printf("\"%s\" in modify\n", event->name);
-	}
-	if (event->mask & IN_CLOSE){
-		printf("\"%s\" in close\n", event->name);
+		dprintf(log_fd, "\ntime: %s, \"%s\" in modify\n",  asctime(timeinfo), event->name);
 	}
 }
 
@@ -447,6 +446,11 @@ int GetFileSize(int fd){
 //----------------------------------------------------------------------------------------------------//
 
 int CopyFile(char *path_out, char *path_to){
+	time_t rawtime;
+	struct tm * timeinfo;
+	time ( &rawtime );
+	timeinfo = localtime ( &rawtime );
+	dprintf(log_fd, "\ntime %s: copying %s to %s\n", asctime (timeinfo), path_out, path_to);
 	//printf("CopyFile%s\n", path_out);
 	int fd_in = open(path_out, O_RDONLY);
 	int fd_out = open(path_to, O_RDWR | O_CREAT | O_TRUNC, 0666);
@@ -486,6 +490,11 @@ int ArrEqual(char *arr1, char *arr2){
 //----------------------------------------------------------------------------------------------------//
 
 int RemoveDirectory(char *path) {
+	time_t rawtime;
+	struct tm * timeinfo;
+	time ( &rawtime );
+	timeinfo = localtime ( &rawtime );
+	dprintf(log_fd, "\ntime %s: removing %s\n", asctime (timeinfo), path);
 	printf("RemoveDirectory %s\n", path);
 	DIR *d = opendir(path);
 	size_t path_len = strlen(path);
@@ -533,6 +542,11 @@ int RemoveDirectory(char *path) {
 //----------------------------------------------------------------------------------------------------//
 
 int RemoveExtra(char *path_from, char *path_to){
+	time_t rawtime;
+	struct tm * timeinfo;
+	time ( &rawtime );
+	timeinfo = localtime ( &rawtime );
+	dprintf(log_fd, "\ntime %sremoving extra in %s\n", asctime (timeinfo), path_to);
 	DIR* pdir_from = opendir(path_from);
 	if(pdir_from == 0){
 		return -1;
@@ -601,5 +615,21 @@ int DifferentFiles(char * path_1, char * path_2) {
 	if (time > 0) {
 		return 1;
 	}
+	return 0;
+}
+
+int SetInotifyRecursively(char *path, int ino_fd){
+	inotify_add_watch(ino_fd, path, IN_CREATE | IN_DELETE | IN_MODIFY);
+	//printf("Set inotify, path = %s, added = %d\n", path, added);
+	DIR* pdir = opendir(path);
+	struct dirent* dt;
+	while ((dt = readdir(pdir)) != NULL){
+		char *new_path = Concatinate(path, dt->d_name);
+		if (dt->d_type == DT_DIR && dt->d_name[0] != '.'){
+			SetInotifyRecursively(new_path, ino_fd);
+		}
+		free(new_path);
+	}
+	closedir(pdir);
 	return 0;
 }
