@@ -42,7 +42,7 @@ int RemoveExtra(char *path_from, char *path_to);
 int DifferentFiles(char * path_1, char * path_2);
 int CopyDir(char *path_out, char *path_to);
 int SetInotifyRecursively(char *path, int ino_fd);
-void Mainloop();
+void loop();
 char * Find_command(char * txt);
 void Inotify_mode();
 
@@ -82,7 +82,7 @@ int main(int argc, char ** argv) {
 		case 0:
 			//setsid();
 			//printf("CHILD NOT DAEMON\n");
-			Mainloop();
+			loop();
 			exit(EXIT_FAILURE);
 		case -1:
 			printf("Fail: unable to fork\n");
@@ -106,7 +106,7 @@ int main(int argc, char ** argv) {
 
 //====================================================================================================//
 
-void Mainloop(){
+void loop(){
 	//printf("DAEMON: already daemon\n");
 
 	int ret;
