@@ -19,6 +19,7 @@
 #define EVENT_SIZE  ( sizeof (struct inotify_event) ) /*размер структуры события*/
 #define BUF_LEN     ( MAX_EVENTS * ( EVENT_SIZE + LEN_NAME )) /*буфер для хранения данных о событиях*/
 
+
 //====================================================================================================//
 
 int inotify_mode = 0;
@@ -42,9 +43,9 @@ int RemoveExtra(char *path_from, char *path_to);
 int DifferentFiles(char * path_1, char * path_2);
 int CopyDir(char *path_out, char *path_to);
 int SetInotifyRecursively(char *path, int ino_fd);
-void loop();
+void LoopAuto();
 char * Find_command(char * txt);
-void Inotify_mode();
+void UpdatingDestWithEvent();
 
 //====================================================================================================//
 
@@ -73,31 +74,18 @@ int main(int argc, char ** argv) {
 	}
 	char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
 	log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
+	free(path_to_log_file);
 
 	if ((argc == 4) && (!strcmp("-auto", argv[3]))){
 		mkdir(path_for_bckp_dir, 0777);
-		int pid = fork();
-		switch(pid) {
-		case 0:
-			//setsid();
-			//printf("CHILD NOT DAEMON\n");
-			loop();
-			exit(EXIT_FAILURE);
-		case -1:
-			printf("Fail: unable to fork\n");
-			break;
-		default:
-			//printf("OK: demon with pid %d is created\n", pid);
-			//int wst;
-			//wait(&wst);
-			break;
-		}
-		return 0;
+		LoopAuto();
+		exit(EXIT_FAILURE);
 	}
 
 	if (argc == 3){
 		RemoveExtra(path_for_copy_dir, path_for_bckp_dir);
 		CopyDir(path_for_copy_dir, path_for_bckp_dir);
+		close(log_fd);
 	}
 
 	return 0;
@@ -105,7 +93,7 @@ int main(int argc, char ** argv) {
 
 //====================================================================================================//
 
-void loop(){
+void LoopAuto(){
 	int ret;
 	char * command;
 	char text[PATH_MAX] = {0};
@@ -118,9 +106,8 @@ void loop(){
 	int forked = fork();
 	switch (forked){
 	case 0:
-		Inotify_mode();
+		UpdatingDestWithEvent();
 		exit(EXIT_FAILURE);
-		break;
 	case -1:
 		printf("Fail: unable to fork\n");
 		break;			
@@ -129,7 +116,7 @@ void loop(){
 		pid_child = forked;
 		break;
 	}
-
+	// Code below executing by parent
 	//printf("DAEMON: before while(1)\n");
 
 	int ino_chanel = inotify_init();
@@ -156,6 +143,7 @@ void loop(){
 		printf("DAEMON: GET %s\n", text);
 		printf("DAEMON: FIND %s\n", command);
 
+
 		if (!command){
 			continue;
 		}
@@ -164,6 +152,7 @@ void loop(){
 		//remove("chanel.txt");
 		int fd_chanel = open("chanel.txt", O_RDWR | O_CREAT, 0666);
 		if(fd_chanel == -1){
+			close(log_fd);
 			perror("DAEMON: open return -1\n");
 		}
 
@@ -185,7 +174,7 @@ void loop(){
 			forked = fork();
 			switch (forked){
 			case 0:
-				Inotify_mode();
+				UpdatingDestWithEvent();
 				exit(EXIT_FAILURE);
 				break;
 			case -1:
@@ -220,16 +209,16 @@ void loop(){
 
 //----------------------------------------------------------------------------------------------------//
 
-void Inotify_mode(){
+void UpdatingDestWithEvent(){
 	char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
-	log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
-	//setsid();
+	// log file is already opened
+	//log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	int ino_fd = inotify_init();
 	CopyDir(path_for_copy_dir, path_for_bckp_dir);
 	SetInotifyRecursively(path_for_copy_dir, ino_fd);
 	char buf[sizeof(struct inotify_event) + PATH_MAX];
 	while (1){
-		while (read(ino_fd, (void *) buf, PATH_MAX) <= 0) {
+		while (read(ino_fd, (void *) buf, PATH_MAX) <= 0) {//wait for event
 			;
 		}
 		PrintEvent((struct inotify_event*) buf);
