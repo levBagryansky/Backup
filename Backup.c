@@ -63,18 +63,17 @@ int main(int argc, char ** argv) {
 			case 1:
 				printf("destination in source\n");
 				exit(EXIT_FAILURE);
-				break;
 			case -1:
 				printf("destination does not exist\n");
 				break;
 			case -2:
 				printf("source does not exists\n");
 				exit(EXIT_FAILURE);
-				break;
 		}
 	}
 	char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
 	log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
+
 	if ((argc == 4) && (!strcmp("-auto", argv[3]))){
 		mkdir(path_for_bckp_dir, 0777);
 		int pid = fork();
@@ -107,10 +106,7 @@ int main(int argc, char ** argv) {
 //====================================================================================================//
 
 void loop(){
-	//printf("DAEMON: already daemon\n");
-
 	int ret;
-
 	char * command;
 	char text[PATH_MAX] = {0};
 
@@ -119,8 +115,8 @@ void loop(){
 		perror("DAEMON: open return -1\n");
 	}
 
-	int pid = fork();
-	switch (pid){
+	int forked = fork();
+	switch (forked){
 	case 0:
 		Inotify_mode();
 		exit(EXIT_FAILURE);
@@ -130,7 +126,7 @@ void loop(){
 		break;			
 	default:
 		pid_parent = getpid();
-		pid_child = pid;
+		pid_child = forked;
 		break;
 	}
 
@@ -141,13 +137,9 @@ void loop(){
 	char buf[sizeof(struct inotify_event) + PATH_MAX];
 
 	while(1){
-
-		//printf("DAEMON: in begining while(1)\n");
-
 		while (read(ino_chanel, (void *) buf, PATH_MAX) <= 0) {
 			;
 		}
-
 
 		//printf("DAEMON: event happens\n");
 
@@ -190,8 +182,8 @@ void loop(){
 			memset(path_for_bckp_dir, '\0', PATH_MAX);
 			strcpy(path_for_bckp_dir, command);
 
-			pid = fork();
-			switch (pid){
+			forked = fork();
+			switch (forked){
 			case 0:
 				Inotify_mode();
 				exit(EXIT_FAILURE);
@@ -201,7 +193,7 @@ void loop(){
 				break;			
 			default:
 				pid_parent = getpid();
-				pid_child = pid;
+				pid_child = forked;
 				break;
 			}
 			dprintf(fd_chanel, "DAEMON: changes directory for backup to %s\n", path_for_bckp_dir);
