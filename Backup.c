@@ -94,7 +94,6 @@ int main(int argc, char ** argv) {
 //====================================================================================================//
 
 void LoopAuto(){
-	int ret;
 	char * command;
 	char text[PATH_MAX] = {0};
 
@@ -134,7 +133,7 @@ void LoopAuto(){
 		command = text;
 
 		lseek(fd_chanel, SEEK_SET, 0);
-		ret = read(fd_chanel, text, PATH_MAX);
+		int ret = read(fd_chanel, text, PATH_MAX);
 
 		//printf("DAEMON: read %d\n", ret);
 
@@ -147,8 +146,8 @@ void LoopAuto(){
 		if (!command){
 			continue;
 		}
-		
-		//close(fd_chanel);
+
+		close(fd_chanel);
 		//remove("chanel.txt");
 		int fd_chanel = open("chanel.txt", O_RDWR | O_CREAT, 0666);
 		if(fd_chanel == -1){
@@ -339,7 +338,7 @@ void PrintEvent(struct inotify_event *event){
 	printf("In PrintEvent, ");
 	if (event->mask & IN_CREATE){
 		printf("\"%s\" in create\n", event->name);
-		dprintf(log_fd, "\ntime: %s, \"%s\" in create\n",  asctime(timeinfo), event->name);
+		dprintf(log_fd, "\ntime: %s\"%s\" in create\n",  asctime(timeinfo), event->name);
 	}
 	if (event->mask & IN_DELETE){
 		printf("\"%s\" in delete\n", event->name);
