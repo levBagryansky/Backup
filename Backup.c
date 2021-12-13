@@ -2,14 +2,12 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
 #include <sys/wait.h>
 #include <sys/inotify.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-#include <sys/inotify.h>
 #include <time.h>
 
 //====================================================================================================//
@@ -48,13 +46,6 @@ int SetInotifyRecursively(char *path, int ino_fd);
 void LoopAuto();
 char * Find_command(char * txt);
 void UpdatingDestWithEvent();
-void PrintToLog(char *message){
-	time_t rawtime;
-	struct tm * timeinfo;
-	time ( &rawtime );
-	timeinfo = localtime ( &rawtime );
-	dprintf(log_fd, "\ntime %scopying file %s to %s\n", asctime (timeinfo), path_out, path_to);
-}
 
 //====================================================================================================//
 
