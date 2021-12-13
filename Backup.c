@@ -29,6 +29,8 @@ pid_t pid_parent;
 pid_t pid_child;
 char path_for_copy_dir[PATH_MAX] = {0};
 char path_for_bckp_dir[PATH_MAX] = {0};
+time_t rawtime;
+struct tm * timeinfo;
 
 void PrintEvent(struct inotify_event *event);
 char* Concatinate(char *part1, char *part2);
@@ -46,6 +48,13 @@ int SetInotifyRecursively(char *path, int ino_fd);
 void LoopAuto();
 char * Find_command(char * txt);
 void UpdatingDestWithEvent();
+void PrintToLog(char *message){
+	time_t rawtime;
+	struct tm * timeinfo;
+	time ( &rawtime );
+	timeinfo = localtime ( &rawtime );
+	dprintf(log_fd, "\ntime %scopying file %s to %s\n", asctime (timeinfo), path_out, path_to);
+}
 
 //====================================================================================================//
 
@@ -72,12 +81,18 @@ int main(int argc, char ** argv) {
 				exit(EXIT_FAILURE);
 		}
 	}
-	char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
+
+
+	char *path_to_log_file = Concatinate(path_for_bckp_dir, ".log_backup");
+	mkdir(path_for_bckp_dir, 0777);
 	log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	free(path_to_log_file);
 
+	time ( &rawtime );
+	timeinfo = localtime ( &rawtime );
+	dprintf(log_fd, "\ntime %sI have been opened\n", asctime (timeinfo));
+
 	if ((argc == 4) && (!strcmp("-auto", argv[3]))){
-		mkdir(path_for_bckp_dir, 0777);
 		LoopAuto();
 		exit(EXIT_FAILURE);
 	}
@@ -209,7 +224,6 @@ void LoopAuto(){
 //----------------------------------------------------------------------------------------------------//
 
 void UpdatingDestWithEvent(){
-	char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
 	// log file is already opened
 	//log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	int ino_fd = inotify_init();
@@ -462,27 +476,26 @@ int CopyFile(char *path_out, char *path_to){
 	struct tm * timeinfo;
 	time ( &rawtime );
 	timeinfo = localtime ( &rawtime );
-	dprintf(log_fd, "\ntime %s: copying file %s to %s\n", asctime (timeinfo), path_out, path_to);
+	dprintf(log_fd, "\ntime %scopying file %s to %s\n", asctime (timeinfo), path_out, path_to);
 	//printf("CopyFile%s\n", path_out);
-	int fd_in = open(path_out, O_RDONLY);
-	int fd_out = open(path_to, O_RDWR | O_CREAT | O_TRUNC, 0666);
-	if(fd_out == -1){
+	int   c;
+	FILE *stream_R;
+	FILE *stream_W;
+
+	stream_R = fopen (path_out, "r");
+	if (stream_R == NULL)
 		return -1;
+	stream_W = fopen (path_to, "w");   //create and write to file
+	if (stream_W == NULL)
+	{
+		fclose (stream_R);
+		return -2;
 	}
-	int size = GetFileSize(fd_in);
-	char* src = mmap(0, size, PROT_READ, MAP_SHARED, fd_in, 0);
-	if(src == NULL){
-		return -1;
-	}
-	lseek(fd_out, size - 1, SEEK_SET);
-	write(fd_out, "", 1);
-	char* dst = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED, fd_out, 0);
-	if(dst == NULL){
-		return -1;
-	}
-	memcpy(dst, src, size);
-	close(fd_out);
-	close(fd_in);
+	while ((c = fgetc(stream_R)) != EOF)
+		fputc (c, stream_W);
+	fclose (stream_R);
+	fclose (stream_W);
+
 	return 0;
 }
 
@@ -494,7 +507,7 @@ int CopySymLik(char *path_from, char *path_to){
 	struct tm * timeinfo;
 	time ( &rawtime );
 	timeinfo = localtime ( &rawtime );
-	dprintf(log_fd, "\ntime %s: copying symlink %s to %s\n", asctime (timeinfo), path_from, path_to);
+	dprintf(log_fd, "\ntime %scopying symlink %s to %s\n", asctime (timeinfo), path_from, path_to);
 
 	char *link_content = calloc(PATH_MAX, sizeof (char));
 	int n_read = readlink(path_from, link_content, PATH_MAX);
@@ -542,7 +555,7 @@ int RemoveDirectory(char *path) {
 	struct tm * timeinfo;
 	time ( &rawtime );
 	timeinfo = localtime ( &rawtime );
-	dprintf(log_fd, "\ntime %s: removing %s\n", asctime (timeinfo), path);
+	dprintf(log_fd, "\ntime %sremoving %s\n", asctime (timeinfo), path);
 	printf("RemoveDirectory %s\n", path);
 	DIR *d = opendir(path);
 	size_t path_len = strlen(path);
@@ -621,7 +634,7 @@ int RemoveExtra(char *path_from, char *path_to){
 				if (dt_to->d_type == DT_DIR) {
 					RemoveDirectory(new_path);
 				} else {
-					printf("Unlinl %s\n", new_path);
+					printf("Unlinlk %s\n", new_path);
 					unlink(new_path);
 				}
 				free(new_path);
