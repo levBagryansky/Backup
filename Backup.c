@@ -33,7 +33,7 @@ struct tm * timeinfo;
 void PrintEvent(struct inotify_event *event);
 char* Concatenate(char *part1, char *part2);
 int GetFullPath(char* path, char *full_path); // Переводит путь к файлу в полный путь
-int SUKABLYITHUY(char * HUY, char * PEZDA, char * CHLEN);
+int GetPathToLink(char * path_content, char * full_path, char * delta_path);
 int DestInSource(char *destination, char *source); //return 1 if destination in source, 0 if not and -1 if destination doesn't exist, -2 if src
 int GetFileSize(int fd);
 int CopyFile(char *path_out, char *path_to);
@@ -428,6 +428,10 @@ void PrintEvent(struct inotify_event *event){
 		printf("\"%s\" in modify\n", event->name);
 		dprintf(log_fd, "DAEMON %s~ \"%s\" in modify\n",  asctime(timeinfo), event->name);
 	}
+	if (event->mask & IN_MOVE){
+		printf("\"%s\" in move\n", event->name);
+		dprintf(log_fd, "DAEMON %s~ \"%s\" in move\n",  asctime(timeinfo), event->name);
+	}
 }
 
 //----------------------------------------------------------------------------------------------------//
@@ -466,31 +470,31 @@ char* Concatenate(char *part1, char *part2){
 
 //----------------------------------------------------------------------------------------------------//
 
-int SUKABLYITHUY(char * HUY, char * PEZDA, char * CHLEN){
-	printf("SUKABLYITHUY get arg:\n%s %s %s\n", HUY, PEZDA, CHLEN);
+int GetPathToLink(char * path_content, char * full_path, char * delta_path){
+	//printf("GetPathToLink get arg:\n%s %s %s\n", path_content, full_path, delta_path);
 
 	int aar = 0;
 
-	aar = strrchr(CHLEN, '/') - CHLEN;
+	aar = strrchr(delta_path, '/') - delta_path;
 	if (aar == -1){
 		printf("In CopySymLink strrchr returned %d\n", aar);
 		return -1;
 	}
 
 	for (int i = aar + 1; i < PATH_MAX; i++){
-		CHLEN[i] = '\0';
+		delta_path[i] = '\0';
 	}
 
-	printf("new CHLEN %s\n", CHLEN);
+	//printf("new delta_path %s\n", delta_path);
 
-	if (HUY[0] != '/'){
-		HUY = Concatenate(CHLEN, HUY);
+	if (path_content[0] != '/'){
+		path_content = Concatenate(delta_path, path_content);
 	}
 
-	aar = GetFullPath(HUY, PEZDA);
+	aar = GetFullPath(path_content, full_path);
 
 	if (aar == -1){
-		printf("In CopySymLink GetFullParh returned %d\n", aar);
+		printf("In CopySymLink GetFullPath returned %d\n", aar);
 		return -1;
 	}
 	return 1;
@@ -614,11 +618,11 @@ int CopySymLik(char *path_from, char *path_to){
 	}
 
 	char* full_link_content = calloc(PATH_MAX, sizeof (char));
-	int got_full_path = SUKABLYITHUY(link_content, full_link_content, path_from);
+	int got_full_path = GetPathToLink(link_content, full_link_content, path_from);
 	free(link_content);
 	if (got_full_path == -1){
 		free(full_link_content);
-		printf("In CopySymLink SUKABLYITHUY returned %d\n", got_full_path);
+		printf("In CopySymLink GetPathToLink returned %d\n", got_full_path);
 		return -1;
 	}
 
@@ -731,7 +735,7 @@ int RemoveExtra(char *path_from, char *path_to){
 				if (dt_to->d_type == DT_DIR) {
 					RemoveDirectory(new_path);
 				} else {
-					printf("Unlinlk %s\n", new_path);
+					printf("Unlinkl %s\n", new_path);
 					unlink(new_path);
 				}
 				free(new_path);
@@ -781,7 +785,7 @@ int DifferentFiles(char * path_1, char * path_2) {
 //----------------------------------------------------------------------------------------------------//
 
 int SetInotifyRecursively(char *path, int ino_fd){
-	inotify_add_watch(ino_fd, path, IN_CREATE | IN_DELETE | IN_MODIFY);
+	inotify_add_watch(ino_fd, path, IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVE);
 	//printf("Set inotify, path = %s, added = %d\n", path, added);
 	DIR* pdir = opendir(path);
 	struct dirent* dt;
