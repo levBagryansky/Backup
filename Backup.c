@@ -219,8 +219,8 @@ void LoopAuto(){
 				break;
 			}
 			dprintf(fd_chanel, "DAEMON: changes directory for backup to %s\n", path_for_bckp_dir);
-		}else if(!strncmp(command, "cpy_dir", 7)){
-			dprintf(fd_chanel, "DAEMON: get command: cpy_dir\n");
+		}else if(!strncmp(command, "dest_dir", 7)){
+			dprintf(fd_chanel, "DAEMON: get command: dest_dir\n");
 			
 			kill(pid_child, SIGKILL);
 
