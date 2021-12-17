@@ -33,6 +33,7 @@ struct tm * timeinfo;
 void PrintEvent(struct inotify_event *event);
 char* Concatinate(char *part1, char *part2);
 int GetFullPath(char* path, char *full_path); // Переводит путь к файлу в полный путь
+int SUKABLYITHUY(char * HUY, char * PEZDA, char * CHLEN);
 int DestInSource(char *destination, char *source); //return 1 if destination in source, 0 if not and -1 if destination doesn't exist, -2 if src
 int GetFileSize(int fd);
 int CopyFile(char *path_out, char *path_to);
@@ -74,16 +75,17 @@ int main(int argc, char ** argv) {
 	}
 
 
-	char *path_to_log_file = Concatinate(path_for_bckp_dir, ".log_backup");
+	char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
 	mkdir(path_for_bckp_dir, 0777);
 	log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	free(path_to_log_file);
 
 	time ( &rawtime );
 	timeinfo = localtime ( &rawtime );
-	dprintf(log_fd, "\ntime %sI have been opened\n", asctime (timeinfo));
+	dprintf(log_fd, "DAEMON %s~ I (file) have been opened by backup program\n", asctime (timeinfo));
 
 	if ((argc == 4) && (!strcmp("-auto", argv[3]))){
+		printf("Auto mode activated\n");
 		LoopAuto();
 		exit(EXIT_FAILURE);
 	}
@@ -142,6 +144,7 @@ void LoopAuto(){
 		int ret = read(fd_chanel, text, PATH_MAX);
 
 		//printf("DAEMON: read %d\n", ret);
+		//memset(command, '\0', PATH_MAX);
 
 		command = Find_command(text);
 
@@ -165,16 +168,41 @@ void LoopAuto(){
 		struct tm * timeinfo;
 		time ( &rawtime );
 		timeinfo = localtime ( &rawtime );
-		dprintf(log_fd, "\ntime %sget command %s\n", asctime (timeinfo), command);
+		dprintf(log_fd, "DAEMON %s~ get command:\n%s", asctime (timeinfo), command);
 
 		if(!strncmp(command, "bcp_dir", 7)){
+			dprintf(fd_chanel, "DAEMON: get command: bcp_dir\n");
+			
 			kill(pid_child, SIGKILL);
+			close(log_fd);
 
-			command = strchr(command, ' ');
-			command++;
-
+			char * new_path = strchr(command, ' ');
+			new_path++;
+			for (int i = 0; i < strlen(new_path); i++){
+				if (new_path[i] == '\n'){
+					new_path[i] = '\0';
+					break;
+				}
+			}
+			
+			if (DestInSource(new_path, path_for_copy_dir) == 1){
+				printf("DAEMON: user put wrong path for changing backup directory\n");
+				dprintf(fd_chanel, "DAEMON: user put wrong path for changing backup directory\n");
+				dprintf(log_fd, "~ wrogn path for changing backup directory\n");
+				continue;
+			}
+			
 			memset(path_for_bckp_dir, '\0', PATH_MAX);
-			strcpy(path_for_bckp_dir, command);
+			strcpy(path_for_bckp_dir, new_path);
+
+			char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
+			mkdir(path_for_bckp_dir, 0777);
+			log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
+			free(path_to_log_file);
+
+			time ( &rawtime );
+			timeinfo = localtime ( &rawtime );
+			dprintf(log_fd, "DAEMON %s~ I (file) have been opened by backup program\n", asctime (timeinfo));
 
 			forked = fork();
 			switch (forked){
@@ -192,9 +220,44 @@ void LoopAuto(){
 			}
 			dprintf(fd_chanel, "DAEMON: changes directory for backup to %s\n", path_for_bckp_dir);
 		}else if(!strncmp(command, "cpy_dir", 7)){
-			kill(pid_child, SIGKILL);
 			dprintf(fd_chanel, "DAEMON: get command: cpy_dir\n");
-			dprintf(fd_chanel, "DAEMON: I do nothing)\n");
+			
+			kill(pid_child, SIGKILL);
+
+			char * new_path = strchr(command, ' ');
+			new_path++;
+			for (int i = 0; i < strlen(new_path); i++){
+				if (new_path[i] == '\n'){
+					new_path[i] = '\0';
+					break;
+				}
+			}
+			
+			if (DestInSource(path_for_bckp_dir, new_path) == 1){
+				printf("DAEMON: user put wrong path for changing backup directory\n");
+				dprintf(fd_chanel, "DAEMON: user put wrong path for changing backup directory\n");
+				dprintf(log_fd, "~ wrogn path for changing backup directory\n");
+				continue;
+			}
+			
+			memset(path_for_copy_dir, '\0', PATH_MAX);
+			strcpy(path_for_copy_dir, new_path);
+
+			forked = fork();
+			switch (forked){
+			case 0:
+				UpdatingDestWithEvent();
+				exit(EXIT_FAILURE);
+				break;
+			case -1:
+				printf("Fail: unable to fork\n");
+				break;			
+			default:
+				pid_parent = getpid();
+				pid_child = forked;
+				break;
+			}
+			dprintf(fd_chanel, "DAEMON: changes directory for copy to %s\n", path_for_bckp_dir);
 
 		}else if(!strncmp(command, "info", 4)){
 			dprintf(fd_chanel, "DAEMON: copy directory: %s\n", path_for_copy_dir);
@@ -226,6 +289,14 @@ void UpdatingDestWithEvent(){
 			;
 		}
 		PrintEvent((struct inotify_event*) buf);
+		if(DestInSource(path_for_bckp_dir, path_for_copy_dir) == -1){
+			printf("DAEMON: souce has been deleted\n");
+			time ( &rawtime );
+			timeinfo = localtime ( &rawtime );
+			dprintf(log_fd, "DAEMON %s~ souce has been deleted\n", asctime (timeinfo));	
+			kill(pid_parent, SIGUSR1);
+			exit(EXIT_FAILURE);
+		}
 		RemoveExtra(path_for_copy_dir, path_for_bckp_dir);
 		CopyDir(path_for_copy_dir, path_for_bckp_dir);
 		close(ino_fd);
@@ -343,19 +414,19 @@ void PrintEvent(struct inotify_event *event){
 	printf("In PrintEvent, ");
 	if (event->mask & IN_CREATE){
 		printf("\"%s\" in create\n", event->name);
-		dprintf(log_fd, "\ntime: %s\"%s\" in create\n",  asctime(timeinfo), event->name);
+		dprintf(log_fd, "DAEMON %s~ \"%s\" in create\n",  asctime(timeinfo), event->name);
 	}
 	if (event->mask & IN_DELETE){
 		printf("\"%s\" in delete\n", event->name);
-		dprintf(log_fd, "\ntime: %s, \"%s\" in delete\n",  asctime(timeinfo), event->name);
+		dprintf(log_fd, "DAEMON %s~ \"%s\" in delete\n",  asctime(timeinfo), event->name);
 	}
 	if (event->mask & IN_CLOSE){
 		printf("\"%s\" in close\n", event->name);
-		dprintf(log_fd, "\ntime: %s, \"%s\" in close\n",  asctime(timeinfo), event->name);
+		dprintf(log_fd, "DAEMON %s~ \"%s\" in close\n",  asctime(timeinfo), event->name);
 	}
 	if (event->mask & IN_MODIFY){
 		printf("\"%s\" in modify\n", event->name);
-		dprintf(log_fd, "\ntime: %s, \"%s\" in modify\n",  asctime(timeinfo), event->name);
+		dprintf(log_fd, "DAEMON %s~ \"%s\" in modify\n",  asctime(timeinfo), event->name);
 	}
 }
 
@@ -395,7 +466,41 @@ char* Concatinate(char *part1, char *part2){
 
 //----------------------------------------------------------------------------------------------------//
 
+int SUKABLYITHUY(char * HUY, char * PEZDA, char * CHLEN){
+	printf("SUKABLYITHUY get arg:\n%s %s %s\n", HUY, PEZDA, CHLEN);
+
+	int aar = 0;
+
+	aar = strrchr(CHLEN, '/') - CHLEN;
+	if (aar == -1){
+		printf("In CopySymLink strrchr returned %d\n", aar);
+		return -1;
+	}
+
+	for (int i = aar + 1; i < PATH_MAX; i++){
+		CHLEN[i] = '\0';
+	}
+
+	printf("new CHLEN %s\n", CHLEN);
+
+	if (HUY[0] != '/'){
+		HUY = Concatinate(CHLEN, HUY);
+	}
+
+	aar = GetFullPath(HUY, PEZDA);
+
+	if (aar == -1){
+		printf("In CopySymLink GetFullParh returned %d\n", aar);
+		return -1;
+	}
+	return 1;
+}
+
+//----------------------------------------------------------------------------------------------------//
+
 int GetFullPath(char* path, char *full_path){
+
+	printf("getfullpath get arg:\n%s %s\n", path, full_path);
 	if(path[0] == '/'){
 		int i = 0;
 		while (path[i] != 0){
@@ -407,9 +512,10 @@ int GetFullPath(char* path, char *full_path){
 
 	getcwd(full_path, PATH_MAX);
 	char *concatenated = Concatinate(full_path, path);
-	//printf("concatenated = %s\n", concatenated);
+	printf("concatenated = %s\n", concatenated);
 	if(realpath(concatenated, full_path) == NULL){
 		free(concatenated);
+		perror("realpath return NULL\n");
 		return -1;
 	}
 	//printf("fullpath = %s\n", full_path);
@@ -467,7 +573,7 @@ int CopyFile(char *path_out, char *path_to){
 	struct tm * timeinfo;
 	time ( &rawtime );
 	timeinfo = localtime ( &rawtime );
-	dprintf(log_fd, "\ntime %scopying file %s to %s\n", asctime (timeinfo), path_out, path_to);
+	dprintf(log_fd, "DAEMON %s~ copying file %s to %s\n", asctime (timeinfo), path_out, path_to);
 	//printf("CopyFile%s\n", path_out);
 	int   c;
 	FILE *stream_R;
@@ -494,11 +600,10 @@ int CopyFile(char *path_out, char *path_to){
 
 int CopySymLik(char *path_from, char *path_to){
 	// copied link will link to the same content
-	time_t rawtime;
-	struct tm * timeinfo;
+
+	printf("symlink get arg:\n%s %s\n", path_from, path_to);
 	time ( &rawtime );
 	timeinfo = localtime ( &rawtime );
-	dprintf(log_fd, "\ntime %scopying symlink %s to %s\n", asctime (timeinfo), path_from, path_to);
 
 	char *link_content = calloc(PATH_MAX, sizeof (char));
 	int n_read = readlink(path_from, link_content, PATH_MAX);
@@ -509,11 +614,11 @@ int CopySymLik(char *path_from, char *path_to){
 	}
 
 	char* full_link_content = calloc(PATH_MAX, sizeof (char));
-	int got_full_path = GetFullPath(link_content, full_link_content);
+	int got_full_path = SUKABLYITHUY(link_content, full_link_content, path_from);
 	free(link_content);
 	if (got_full_path == -1){
 		free(full_link_content);
-		printf("In CopySymLink GetFullPath returned %d\n", got_full_path);
+		printf("In CopySymLink SUKABLYITHUY returned %d\n", got_full_path);
 		return -1;
 	}
 
@@ -523,6 +628,7 @@ int CopySymLik(char *path_from, char *path_to){
 		printf("In CopySymLink symlink returned -1\n");
 		return -1;
 	}
+	dprintf(log_fd, "DAEMON %s~ copying symlink %s to %s\n", asctime (timeinfo), path_from, path_to);
 	return 0;
 }
 
@@ -546,7 +652,7 @@ int RemoveDirectory(char *path) {
 	struct tm * timeinfo;
 	time ( &rawtime );
 	timeinfo = localtime ( &rawtime );
-	dprintf(log_fd, "\ntime %sremoving %s\n", asctime (timeinfo), path);
+	dprintf(log_fd, "DAEMON %s~ removing %s\n", asctime (timeinfo), path);
 	printf("RemoveDirectory %s\n", path);
 	DIR *d = opendir(path);
 	size_t path_len = strlen(path);
@@ -598,7 +704,7 @@ int RemoveExtra(char *path_from, char *path_to){
 	struct tm * timeinfo;
 	time ( &rawtime );
 	timeinfo = localtime ( &rawtime );
-	dprintf(log_fd, "\ntime %sremoving extra in %s\n", asctime (timeinfo), path_to);
+	dprintf(log_fd, "DAEMON %s~ removing extra in %s\n", asctime (timeinfo), path_to);
 	DIR* pdir_from = opendir(path_from);
 	if(pdir_from == 0){
 		return -1;
@@ -612,7 +718,7 @@ int RemoveExtra(char *path_from, char *path_to){
 	struct dirent* dt_to;
 	int it_exist; // флаг на существование файла в директории dt_to
 	while ((dt_to = readdir(pdir_to)) != NULL){
-		if (strcmp(dt_to->d_name, ".log_backup")) {
+		if (strcmp(dt_to->d_name, "log_backup")) {
 			it_exist = 0;
 			while ((dt_from = readdir(pdir_from)) != NULL) {
 				if (ArrEqual(dt_to->d_name, dt_from->d_name)) {
