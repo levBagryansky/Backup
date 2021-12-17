@@ -11,8 +11,5 @@ Argument "-auto" assigns the background mode to the program (the program creates
 Commands implemented:<br>
 ^ <b>bcp_dir *path</b> - change backup directory, old backup directory doesn't change and saved<br>
 ^ <b>cpy_dir *path</b> - change directory for backup<br>
-^ <b>log</b> - write log file (change histrory)<br>
-^ <b>auto</b> - switch mode of working: automatically backup file after changes in copied directory (or) backup file only after using command<br>
-^ <b>backup</b> - make backup immediately<br>
+^ <b>info</b> - write current copy and backup directories<br>
 ^ <b>exit</b> - close daemon<br>
-^ <b>term *sec</b> - designates the time in seconds between automatic backups<br>

@@ -31,7 +31,7 @@ time_t rawtime;
 struct tm * timeinfo;
 
 void PrintEvent(struct inotify_event *event);
-char* Concatinate(char *part1, char *part2);
+char* Concatenate(char *part1, char *part2);
 int GetFullPath(char* path, char *full_path); // Переводит путь к файлу в полный путь
 int SUKABLYITHUY(char * HUY, char * PEZDA, char * CHLEN);
 int DestInSource(char *destination, char *source); //return 1 if destination in source, 0 if not and -1 if destination doesn't exist, -2 if src
@@ -75,7 +75,7 @@ int main(int argc, char ** argv) {
 	}
 
 
-	char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
+	char *path_to_log_file = Concatenate(path_for_bckp_dir, "log_backup");
 	mkdir(path_for_bckp_dir, 0777);
 	log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	free(path_to_log_file);
@@ -195,7 +195,7 @@ void LoopAuto(){
 			memset(path_for_bckp_dir, '\0', PATH_MAX);
 			strcpy(path_for_bckp_dir, new_path);
 
-			char *path_to_log_file = Concatinate(path_for_bckp_dir, "log_backup");
+			char *path_to_log_file = Concatenate(path_for_bckp_dir, "log_backup");
 			mkdir(path_for_bckp_dir, 0777);
 			log_fd = open(path_to_log_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 			free(path_to_log_file);
@@ -367,11 +367,11 @@ int CopyDir(char *path_out, char *path_to){
 	//printf("pdir = %p\n", pdir);
 	struct dirent* dt;
 	while ((dt = readdir(pdir)) != NULL){
-		char *new_path_to = Concatinate(path_to, dt->d_name);
+		char *new_path_to = Concatenate(path_to, dt->d_name);
 		if(new_path_to == NULL){
 			return -1;
 		}
-		char *new_path_from = Concatinate(path_out, dt->d_name);
+		char *new_path_from = Concatenate(path_out, dt->d_name);
 
 		switch (dt->d_type){
 			case DT_DIR:
@@ -432,7 +432,7 @@ void PrintEvent(struct inotify_event *event){
 
 //----------------------------------------------------------------------------------------------------//
 
-char* Concatinate(char *part1, char *part2){
+char* Concatenate(char *part1, char *part2){
 	char* result = (char *) calloc(PATH_MAX, sizeof (char));
 	buf_i = 0;
 	while (part1[buf_i] != 0){
@@ -484,7 +484,7 @@ int SUKABLYITHUY(char * HUY, char * PEZDA, char * CHLEN){
 	printf("new CHLEN %s\n", CHLEN);
 
 	if (HUY[0] != '/'){
-		HUY = Concatinate(CHLEN, HUY);
+		HUY = Concatenate(CHLEN, HUY);
 	}
 
 	aar = GetFullPath(HUY, PEZDA);
@@ -511,7 +511,7 @@ int GetFullPath(char* path, char *full_path){
 	}
 
 	getcwd(full_path, PATH_MAX);
-	char *concatenated = Concatinate(full_path, path);
+	char *concatenated = Concatenate(full_path, path);
 	printf("concatenated = %s\n", concatenated);
 	if(realpath(concatenated, full_path) == NULL){
 		free(concatenated);
@@ -727,7 +727,7 @@ int RemoveExtra(char *path_from, char *path_to){
 				}
 			}
 			if (!it_exist) { //значит удаляем
-				char *new_path = Concatinate(path_to, dt_to->d_name);
+				char *new_path = Concatenate(path_to, dt_to->d_name);
 				if (dt_to->d_type == DT_DIR) {
 					RemoveDirectory(new_path);
 				} else {
@@ -786,7 +786,7 @@ int SetInotifyRecursively(char *path, int ino_fd){
 	DIR* pdir = opendir(path);
 	struct dirent* dt;
 	while ((dt = readdir(pdir)) != NULL){
-		char *new_path = Concatinate(path, dt->d_name);
+		char *new_path = Concatenate(path, dt->d_name);
 		if (dt->d_type == DT_DIR && dt->d_name[0] != '.'){
 			SetInotifyRecursively(new_path, ino_fd);
 		}
