@@ -257,10 +257,10 @@ void LoopAuto(){
 				pid_child = forked;
 				break;
 			}
-			dprintf(fd_chanel, "DAEMON: changes directory for copy to %s\n", path_for_bckp_dir);
+			dprintf(fd_chanel, "DAEMON: changes source directory to %s\n", path_for_bckp_dir);
 
 		}else if(!strncmp(command, "info", 4)){
-			dprintf(fd_chanel, "DAEMON: copy directory: %s\n", path_for_copy_dir);
+			dprintf(fd_chanel, "DAEMON: source directory: %s\n", path_for_copy_dir);
 			dprintf(fd_chanel, "DAEMON: backup directory: %s\n", path_for_bckp_dir);
 		}else if(!strncmp(command, "exit", 4)){
 			kill(pid_child, SIGKILL);
